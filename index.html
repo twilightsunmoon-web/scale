@@ -307,7 +307,7 @@ td.num{font-variant-numeric:tabular-nums; white-space:nowrap;}
 /* ================= 常量 ================= */
 var RESET_HOUR = 4;                 /* 每日 04:00 本地时区结算 */
 var KEY = 'scale.ledger.v1';
-var APP_VERSION = '1.1.3';
+var APP_VERSION = '1.1.4';
 var REPO = 'twilightsunmoon-web/scale';
 var WEEK_ZH = ['周日','周一','周二','周三','周四','周五','周六'];
 var WEEK_EN = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
@@ -406,6 +406,7 @@ var EN = {
   '时刻':'Time',
   '活动':'Activity',
   '分':'min',
+  '点 · 注意力':'pts · attention',
   '剩':'left',
   '当前阈值':'Current thresholds —',
   '精':'E',
@@ -548,6 +549,7 @@ var EN = {
   '只改系数，不动阈值，也不动已经登记过的历史。':'Only coefficients change — not thresholds, not logged history.',
 
   '分':'min',
+  '点 · 注意力':'pts · attention',
   '剩':'left',
   '当前阈值':'Current thresholds —',
   '点':'pts',
@@ -611,6 +613,7 @@ var EN = {
 var ENR = [
   [/「整天只做这一项，多少分钟后这条线见底」——系数 = 阈值 ÷ 这个分钟数（当前精力 ([\d.]+) \/ 注意力 ([\d.]+)）。/g,
     '“If today were only this activity, how long before the line is hit” — coefficient = threshold ÷ that many minutes (energy $1 / attention $2).'],
+  [/登记 (\d+) 分钟 ≈ 精力/g, '$1 min ≈ energy'],
   [/登记 (\d+) 分钟 ≈ 精力 ([\d.]+) 点 · 注意力 ([\d.]+) 点/g,
     '$1 min ≈ energy $2 pts · attention $3 pts'],
   [/预留 (\d+) 分/g, 'reserved $1 min'],
@@ -2158,6 +2161,7 @@ function refreshNewPreset(){
   if (ao) ao.textContent = '→ ' + fmtPts(aC);
   if (pre){
     pre.innerHTML = '登记 60 分钟 ≈ 精力 <b>' + fmtPts(60 * eC) + '</b> 点 · 注意力 <b>' + fmtPts(60 * aC) + '</b> 点';
+    applyLang(pre);   /* 这段是在翻译之后才生成的，得单独再翻一次 */
   }
 }
 function saveNewPreset(){
