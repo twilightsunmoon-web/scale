@@ -71,7 +71,8 @@
 
 - **全部在本地。** 没有账号、没有服务器、没有任何网络请求。
 - 存储双写：`localStorage` + （APK 内）应用私有目录的 `state.json`。前者读不到时自动回退到后者。
-- 设置里有：导出 JSON（含全部历史）、清空历史（二次确认）、撤销上一次登记。
+- 设置里有：导出 JSON（含全部历史）、**导入 JSON**、清空历史（二次确认）、撤销上一次登记。
+- 导入有两种：**合并**只补本机没有的记录（按 id 判重）；**覆盖**用文件里的刻度、预设和全部历史替换本机数据（界面语言保持不变）。换手机就靠这个。
 - 每个活动登记时都会快照当时的系数与所属列，事后改预设表不会篡改历史记录。
 
 ## 自己构建 APK
@@ -118,7 +119,7 @@ It answers one question and stops there: **can I start another round?** It will 
 - One file. Open `index.html` in any browser, works offline, loads nothing external.
 - Or install `scale.apk` from Releases — **no permissions at all, not even internet**.
 - UI in Chinese and English; choose on first launch, change it any time in Settings.
-- Your data stays on your device: `localStorage`, plus a private file in the Android build as a second copy. Export to JSON whenever you like.
+- Your data stays on your device: `localStorage`, plus a private file in the Android build as a second copy. Export to JSON whenever you like, and **import** it back (merge by id, or replace everything) when you switch devices.
 
 > **Scope:** "time" here means **idle time outside work and sleep** — leisure time, not a full 24-hour day. The daily cap you set is the length of *that* window.
 

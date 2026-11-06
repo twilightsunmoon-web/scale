@@ -12,6 +12,7 @@ import android.provider.MediaStore;
 import android.view.View;
 import android.view.ViewGroup;
 import android.webkit.JavascriptInterface;
+import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
@@ -25,6 +26,8 @@ import java.io.OutputStream;
 public class MainActivity extends Activity {
 
     private WebView web;
+    private ValueCallback<Uri[]> fileCb;
+    private static final int REQ_FILE = 1001;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -49,7 +52,22 @@ public class MainActivity extends Activity {
         s.setCacheMode(WebSettings.LOAD_NO_CACHE);
 
         web.setWebViewClient(new WebViewClient());
-        web.setWebChromeClient(new WebChromeClient());
+        web.setWebChromeClient(new WebChromeClient() {
+            @Override
+            public boolean onShowFileChooser(WebView view, ValueCallback<Uri[]> cb, FileChooserParams params) {
+                fileCb = cb;
+                try {
+                    Intent i = new Intent(Intent.ACTION_GET_CONTENT);
+                    i.addCategory(Intent.CATEGORY_OPENABLE);
+                    i.setType("*/*");            // 各家文件管理器给 .json 报的 MIME 不一致，别过滤太死
+                    startActivityForResult(i, REQ_FILE);
+                } catch (Exception e) {
+                    fileCb = null;
+                    return false;
+                }
+                return true;
+            }
+        });
         web.addJavascriptInterface(new Bridge(), "AndroidApp");
 
         setContentView(web);
@@ -60,6 +78,22 @@ public class MainActivity extends Activity {
         }
 
         web.loadUrl("file:///android_asset/index.html");
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        if (requestCode == REQ_FILE) {
+            Uri[] result = null;
+            if (resultCode == RESULT_OK && data != null && data.getData() != null) {
+                result = new Uri[]{ data.getData() };
+            }
+            if (fileCb != null) {
+                fileCb.onReceiveValue(result);
+                fileCb = null;
+            }
+            return;
+        }
+        super.onActivityResult(requestCode, resultCode, data);
     }
 
     @Override

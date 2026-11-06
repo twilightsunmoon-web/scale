@@ -307,7 +307,7 @@ td.num{font-variant-numeric:tabular-nums; white-space:nowrap;}
 /* ================= 常量 ================= */
 var RESET_HOUR = 4;                 /* 每日 04:00 本地时区结算 */
 var KEY = 'scale.ledger.v1';
-var APP_VERSION = '1.1.1';
+var APP_VERSION = '1.1.2';
 var REPO = 'twilightsunmoon-web/scale';
 var WEEK_ZH = ['周日','周一','周二','周三','周四','周五','周六'];
 var WEEK_EN = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
@@ -556,6 +556,23 @@ var EN = {
   '通用':'General',
   '新增后立刻出现在首页「登记一场」里，常用项会排在最上面。系数只在这里手改，程序不会自动调。“无终点”= 没有自然结束点：高消耗列的无终点活动到线即绑锁屏；低消耗列的无终点活动，开局前必须先写下外置停点。':'New activities show up in "Log a session" right away, most-used on top. Coefficients are edited here only — nothing is auto-tuned. "No end" means no natural stopping point: in the High-cost column it locks the screen at the line; in the Low-cost column you must write a stop point before starting.',
   '检查更新只在点这一下时联网；平时完全不发请求。':'Checking for updates is the only moment it goes online; otherwise it sends no requests at all.',
+
+  '导入 JSON（迁移或恢复）':'Import JSON (migrate or restore)',
+  '导入 JSON':'Import JSON',
+  '选一份之前「导出 JSON」存下的文件。导入前会先列清单，你确认了才写进去。':'Pick a file you exported earlier. You will see a summary first — nothing is written until you confirm.',
+  '数据只在这台设备上处理，不会上传。':'The file is processed on this device only. Nothing is uploaded.',
+  '文件':'File',
+  '导出时间':'Exported',
+  '记录范围':'Range',
+  '合并':'Merge',
+  '覆盖':'Replace',
+  '为：只补本机没有的记录（按 id 判重），当前刻度和预设不动。':'only adds entries this device does not have (by id); thresholds and presets stay as they are.',
+  '用文件里的刻度、预设、全部历史替换本机数据（界面语言保持不变）。':'replaces thresholds, presets and all history with the file’s; your UI language stays.',
+  '合并导入':'Merge in',
+  '覆盖导入':'Replace all',
+  '不是有效的 JSON':'That file is not valid JSON',
+  '文件里没有可用的记录':'No usable records in that file',
+  '改成':'to',
 
   /* 提示语 */
   '本地存储写入失败':'Could not write local storage',
@@ -1342,6 +1359,7 @@ function viewSettings(){
   '<div class="sec">' +
     '<div class="sec-hd">数据</div>' +
     '<button class="ghost" data-act="export">导出 JSON（含全部历史）</button>' +
+    '<button class="ghost" data-act="import">导入 JSON（迁移或恢复）</button>' +
     '<button class="ghost" data-act="undo"' + (last ? '' : ' disabled') + '>' +
       (last ? '撤销上一次登记（' + esc(last.name) + ' ' + last.minutes + ' 分）' : '撤销上一次登记（无记录）') +
     '</button>' +
@@ -1820,6 +1838,7 @@ function syncSheet(){
   else if (ui.sheet.type === 'calc') body = sheetCalc();
   else if (ui.sheet.type === 'entry') body = sheetEntry();
   else if (ui.sheet.type === 'update') body = sheetUpdate();
+  else if (ui.sheet.type === 'import') body = sheetImport();
   l.innerHTML = '<div class="scrim" data-act="close-sheet"></div>' +
                 '<div class="sheet-wrap"><div class="sheet' + (prev ? ' still' : '') + '">' + body + '</div></div>';
   if (prev && keepTop){
@@ -1992,6 +2011,74 @@ function sheetUpdate(){
     '<button class="primary" data-act="open-release">打开发布页</button>' +
     '<div class="note">网页版可以直接刷新；APK 需要下载新的安装包覆盖安装，数据会保留。</div>');
 }
+/* ---- 导入 JSON ---- */
+function sheetImport(){
+  var c = ui.sheet.ctx;
+  if (!c.data){
+    return sheetWrap('导入 JSON',
+      '<div class="note" style="margin-top:0">选一份之前「导出 JSON」存下的文件。导入前会先列清单，你确认了才写进去。</div>' +
+      '<input class="txtin" type="file" id="importFile" accept=".json,application/json" style="margin-top:12px;padding:9px">' +
+      '<div class="note">数据只在这台设备上处理，不会上传。</div>');
+  }
+  var st = c.data;
+  var nE = (st.entries || []).length;
+  var nB = (st.blocks || []).length;
+  var nP = (st.presets || []).length;
+  var keys = (st.entries || []).map(function(e){ return e.dateKey; }).filter(Boolean).sort();
+  var range = keys.length ? (keys[0] + ' → ' + keys[keys.length-1]) : '';
+  var when = '';
+  if (c.exportedAt){
+    var d = new Date(c.exportedAt);
+    if (!isNaN(d.getTime())){
+      when = d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+    }
+  }
+  return sheetWrap('导入 JSON',
+    '<div class="pre">文件 <b>' + esc(c.name || '') + '</b><br>' +
+      '登记 <b>' + nE + '</b> 条 · 冻结块 <b>' + nB + '</b> 个 · 预设 <b>' + nP + '</b> 项' +
+      (when ? '<br>导出时间 ' + when : '') +
+      (range ? '<br>记录范围 ' + range : '') +
+    '</div>' +
+    '<div class="note" style="margin-top:12px">合并：只补本机没有的记录（按 id 判重），当前刻度和预设不动。<br>覆盖：用文件里的刻度、预设、全部历史替换本机数据（界面语言保持不变）。</div>' +
+    '<button class="primary" data-act="import-merge">合并导入</button>' +
+    '<button class="ghost danger" data-act="import-replace">覆盖导入</button>' +
+    '<div class="note">导入后立即按新数据刷新。</div>');
+}
+function doImport(mode){
+  var c = ui.sheet && ui.sheet.ctx;
+  if (!c || !c.data) return;
+  var inc = c.data;
+  if (mode === 'replace'){
+    var keepLang = S.config.lang;
+    S.v = inc.v || 1;
+    S.config = Object.assign(seedState().config, inc.config || {});
+    S.config.lang = keepLang;
+    S.config.set = true;
+    if (Array.isArray(inc.presets) && inc.presets.length) S.presets = inc.presets;
+    S.entries = Array.isArray(inc.entries) ? inc.entries : [];
+    S.blocks = Array.isArray(inc.blocks) ? inc.blocks : [];
+    S.days = (inc.days && typeof inc.days === 'object') ? inc.days : {};
+    ui.sheet = null; save(); render();
+    toast('已覆盖：' + S.entries.length + ' 条登记');
+    return;
+  }
+  var ids = {}, bids = {};
+  S.entries.forEach(function(e){ ids[e.id] = 1; });
+  S.blocks.forEach(function(b){ bids[b.id] = 1; });
+  var addE = 0, addB = 0;
+  (inc.entries || []).forEach(function(e){
+    if (!e || !e.id || ids[e.id]) return;
+    ids[e.id] = 1; S.entries.push(e); addE++;
+  });
+  (inc.blocks || []).forEach(function(b){
+    if (!b || !b.id || bids[b.id]) return;
+    bids[b.id] = 1; S.blocks.push(b); addB++;
+  });
+  if (inc.days) Object.keys(inc.days).forEach(function(k){ if (!S.days[k]) S.days[k] = inc.days[k]; });
+  ui.sheet = null; save(); render();
+  toast('已合并：新增 ' + addE + ' 条登记' + (addB ? '、' + addB + ' 个冻结块' : ''));
+}
+
 function undoLast(){
   if (!S.entries.length){ toast('没有可撤销的登记'); return; }
   var e = S.entries[S.entries.length-1];
@@ -2094,6 +2181,9 @@ document.addEventListener('click', function(ev){
   if (act === 'open-blocks'){ ui.sheet = {type:'blocks', ctx:{}}; syncSheet(); return; }
   if (act === 'open-reserve'){ ui.sheet = {type:'reserve', ctx:{}}; syncSheet(); return; }
   if (act === 'open-calc'){ ui.sheet = {type:'calc', ctx:{}}; syncSheet(); return; }
+  if (act === 'import'){ ui.sheet = {type:'import', ctx:{}}; syncSheet(); return; }
+  if (act === 'import-merge'){ doImport('merge'); return; }
+  if (act === 'import-replace'){ doImport('replace'); return; }
   if (act === 'lang'){ setLanguage(el.getAttribute('data-v')); return; }
   if (act === 'check-update'){ checkUpdate(); return; }
   if (act === 'open-release'){
@@ -2220,6 +2310,26 @@ document.addEventListener('change', function(ev){
   var el = ev.target;
   if (!el) return;
 
+  if (el.id === 'importFile'){
+    var f = el.files && el.files[0];
+    if (!f) return;
+    var rd = new FileReader();
+    rd.onload = function(){
+      var txt = String(rd.result || '');
+      var obj;
+      try { obj = JSON.parse(txt); } catch (err) { toast('不是有效的 JSON'); return; }
+      var st = (obj && obj.state) ? obj.state : obj;
+      if (!st || !Array.isArray(st.entries)){ toast('文件里没有可用的记录'); return; }
+      if (ui.sheet && ui.sheet.type === 'import'){
+        ui.sheet.ctx.data = st;
+        ui.sheet.ctx.name = f.name;
+        ui.sheet.ctx.exportedAt = (obj && obj.exportedAt) ? obj.exportedAt : '';
+        syncSheet();
+      }
+    };
+    rd.readAsText(f);
+    return;
+  }
   if (el.id === 'ed-sel'){ refreshEditPreview(); return; }
   if (el.id === 'ed-time'){ return; }
 
