@@ -12,6 +12,8 @@
 
 ![首页](docs/home.png)
 
+**在线试用**：<https://twilightsunmoon-web.github.io/scale/>　·　**Android**：[下载 APK](../../releases/latest)
+
 <p align="center"><sub>中文 / English · 首次打开选一次，之后在设置里改 · <a href="#english">English ↓</a></sub></p>
 
 ---
@@ -59,9 +61,11 @@
 - 不需要任何权限，包括联网权限
 - 导出 JSON 会写到系统「下载」文件夹
 
-**3. GitHub Pages**
+**3. 在线版（推荐分享这一条）**
 
-仓库 Settings → Pages → Source 选 `main` / root，之后访问 `https://<你的用户名>.github.io/<仓库名>/`。作为 https 站点打开时，浏览器存储是正常持久的，还可以「添加到主屏幕」当应用用。
+<https://twilightsunmoon-web.github.io/scale/>
+
+手机浏览器打开，菜单里选「添加到主屏幕」，用起来跟 App 一样。https 站点的本地存储是持久的，不会出现「关掉就没了」。
 
 ## 数据
 
@@ -110,6 +114,7 @@ You log once before you start; it deducts time, energy and attention separately,
 
 It answers one question and stops there: **can I start another round?** It will not nag you, rate you, or talk you into "just five more minutes".
 
+- **Live version:** <https://twilightsunmoon-web.github.io/scale/> — open on your phone and *Add to Home Screen*.
 - One file. Open `index.html` in any browser, works offline, loads nothing external.
 - Or install `scale.apk` from Releases — **no permissions at all, not even internet**.
 - UI in Chinese and English; choose on first launch, change it any time in Settings.
