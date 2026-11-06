@@ -24,6 +24,8 @@
 | 2 | **双阈值** | 精力分 = Σ(时长×精力系数)，注意力分 = Σ(时长×注意力系数)，各自独立阈值，任一触线即「该停」。只用于判断**能不能开下一场**，不中途熔断 |
 | 3 | **预约冻结块** | 联机只能约在特定时段。冻结块绑在预约当日的额度上，一次划入，不占其他日期，也不要求今天先省着花 |
 
+> **口径**：这里的「时间」指的是**工作与睡觉之外的闲置时间**（娱乐时间），不是一整天 24 小时。你设的「每日上限」是这段时间的长度。
+
 触线 ≠ 不许玩。触线后高消耗项自动变灰，剩余时间只流向低消耗列，同时把预设动作顶出来：**起身倒水 → 正事只做开头 2 分钟**。
 
 爽约的兜底在预约时就写死（顺延到下次窗口 / 直接归零），事后一键执行，不给你临场选的机会。
@@ -112,6 +114,8 @@ It answers one question and stops there: **can I start another round?** It will 
 - Or install `scale.apk` from Releases — **no permissions at all, not even internet**.
 - UI in Chinese and English; choose on first launch, change it any time in Settings.
 - Your data stays on your device: `localStorage`, plus a private file in the Android build as a second copy. Export to JSON whenever you like.
+
+> **Scope:** "time" here means **idle time outside work and sleep** — leisure time, not a full 24-hour day. The daily cap you set is the length of *that* window.
 
 Three rules, each overriding the one after it:
 

@@ -432,6 +432,7 @@ var EN = {
   /* 设置 */
   '刻度（也能在首页直接拖柱子改）':'Scale (also draggable on the home screen)',
   '点 = 分钟 × 系数。改后今天即生效；已过去的日子保留当时的刻度。':'points = minutes × coefficient. Changes apply today; past days keep their own scale.',
+  '这里的「时间」只算工作与睡觉之外的闲置时间（娱乐时间），不是一整天。':'The "time" here is idle time outside work and sleep — leisure time, not the whole day.',
   '下次联机窗口（爽约“顺延”落在这里）':'Next online window (a "postponed" no-show lands here)',
   '日期':'Date',
   '开始':'Start',
@@ -1099,6 +1100,7 @@ function viewSetup(){
       '<input type="number" inputmode="numeric" min="1" value="' + (c.energyThr || '') + '" data-set="ethr" placeholder="点"></div>' +
     '<div class="field"><label>注意力阈值<span class="hint">点 = 分钟 × 注意力系数</span></label>' +
       '<input type="number" inputmode="numeric" min="1" value="' + (c.attentionThr || '') + '" data-set="athr" placeholder="点"></div>' +
+    '<div class="note" style="margin-top:10px">这里的「时间」只算工作与睡觉之外的闲置时间（娱乐时间），不是一整天。</div>' +
     '<div class="note">阈值定下来之后，每个活动的系数可以在设置里用「按等效分钟算系数」反推：系数 = 阈值 ÷ 整日等效分钟。</div>' +
   '</div>' +
   '<button class="primary" data-act="finish-setup" ' + (ready ? '' : 'disabled') + '>用这套刻度开始</button>';
@@ -1310,6 +1312,7 @@ function viewSettings(){
     '<div class="field"><label>精力阈值</label><input type="number" inputmode="numeric" min="1" value="' + (c.energyThr||'') + '" data-set="ethr"><span style="font-size:12px;color:var(--ink3)">点</span></div>' +
     '<div class="field"><label>注意力阈值</label><input type="number" inputmode="numeric" min="1" value="' + (c.attentionThr||'') + '" data-set="athr"><span style="font-size:12px;color:var(--ink3)">点</span></div>' +
     '<div class="note">点 = 分钟 × 系数。改后今天即生效；已过去的日子保留当时的刻度。</div>' +
+    '<div class="note">这里的「时间」只算工作与睡觉之外的闲置时间（娱乐时间），不是一整天。</div>' +
   '</div>' +
   '<div class="sec">' +
     '<div class="sec-hd">下次联机窗口（爽约“顺延”落在这里）</div>' +
