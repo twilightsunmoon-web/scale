@@ -307,7 +307,7 @@ td.num{font-variant-numeric:tabular-nums; white-space:nowrap;}
 /* ================= 常量 ================= */
 var RESET_HOUR = 4;                 /* 每日 04:00 本地时区结算 */
 var KEY = 'scale.ledger.v1';
-var APP_VERSION = '1.1.4';
+var APP_VERSION = '1.2.0';
 var REPO = 'twilightsunmoon-web/scale';
 var WEEK_ZH = ['周日','周一','周二','周三','周四','周五','周六'];
 var WEEK_EN = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
@@ -557,7 +557,7 @@ var EN = {
   '天':'days',
   '通用':'General',
   '新增后立刻出现在首页「登记一场」里，常用项会排在最上面。系数只在这里手改，程序不会自动调。“无终点”= 没有自然结束点：高消耗列的无终点活动到线即绑锁屏；低消耗列的无终点活动，开局前必须先写下外置停点。':'New activities show up in "Log a session" right away, most-used on top. Coefficients are edited here only — nothing is auto-tuned. "No end" means no natural stopping point: in the High-cost column it locks the screen at the line; in the Low-cost column you must write a stop point before starting.',
-  '检查更新只在点这一下时联网；平时完全不发请求。':'Checking for updates is the only moment it goes online; otherwise it sends no requests at all.',
+  '只有点这一下（含下载更新）才联网；平时完全不发请求。':'This button (and the download it starts) is the only time it goes online; otherwise it sends no requests at all.',
 
   '导入 JSON（迁移或恢复）':'Import JSON (migrate or restore)',
   '导入 JSON':'Import JSON',
@@ -586,6 +586,18 @@ var EN = {
   '存好之后会出现在「登记一场」里，也可以再去预设表里改。':'It will show up in “Log a session”, and you can still edit it in the preset table.',
   '先给这个事件起个名字':'Give this activity a name first',
   '已新增：':'Added: ',
+
+  '下载并安装':'Download and install',
+  '直接下载最新版':'Download the latest build',
+  '去 Release 页面':'Open the release page',
+  '可能是新版本':'Maybe there is a newer build',
+  '检查更新':'Check for updates',
+  '没查到版本号，可能没联网。':'Could not read the version — maybe offline.',
+  '可以直接下载最新安装包试试，覆盖安装不会丢数据。':'You can still grab the latest APK directly; installing over keeps your data.',
+  '下载在后台进行，完成后系统会弹出安装器。覆盖安装，数据不会丢。':'It downloads in the background, then the system installer opens. Installing over keeps your data.',
+  '第一次可能要求你允许「刻度」安装未知应用。':'The first time, Android may ask you to allow 「刻度」 to install apps.',
+  '网页版刷新即可拿到新版；APK 去 Release 下载覆盖安装，数据会保留。':'On the web just reload; for the APK download from Releases and install over it — your data stays.',
+  '下载失败：':'Download failed: ',
 
   /* 提示语 */
   '本地存储写入失败':'Could not write local storage',
@@ -1399,7 +1411,7 @@ function viewSettings(){
     '<div class="field"><label>版本<span class="hint">v' + APP_VERSION + ' · ' + REPO + '</span></label>' +
       '<button class="mini-btn" data-act="check-update">检查更新</button>' +
     '</div>' +
-    '<div class="note">检查更新只在点这一下时联网；平时完全不发请求。</div>' +
+    '<div class="note">只有点这一下（含下载更新）才联网；平时完全不发请求。</div>' +
   '</div>' +
 
   '<div class="foot"><button data-act="home">回到首页</button></div>';
@@ -2002,34 +2014,61 @@ function cmpVer(a, b){
   }
   return 0;
 }
+function canInstall(){
+  return !!(window.AndroidApp && window.AndroidApp.installApk);
+}
 function checkUpdate(){
-  /* APK 没有联网权限（故意的），交给浏览器打开发布页，用眼睛比版本号 */
-  if (window.AndroidApp && window.AndroidApp.openUrl){
-    try { window.AndroidApp.openUrl('https://github.com/' + REPO + '/releases/latest'); } catch (e) {}
-    toast('已打开 Releases 页面，看最新版本号');
-    return;
-  }
+  var native = canInstall();
   toast('正在检查…');
   fetch('https://api.github.com/repos/' + REPO + '/releases/latest', {cache:'no-store'})
     .then(function(r){ return r.json(); })
     .then(function(j){
       var tag = String((j && j.tag_name) || '').replace(/^v/i, '');
       if (!tag){ toast('没有找到发布版本'); return; }
-      if (cmpVer(tag, APP_VERSION) > 0){
-        ui.sheet = {type:'update', ctx:{tag:tag, url:j.html_url || ('https://github.com/' + REPO + '/releases')}};
+      if (cmpVer(tag, APP_VERSION) <= 0){ toast('已是最新版本 v' + APP_VERSION); return; }
+      var asset = (j.assets || []).filter(function(a){ return /\.apk$/i.test(a.name); })[0];
+      ui.sheet = {type:'update', ctx:{
+        tag: tag,
+        url: j.html_url || ('https://github.com/' + REPO + '/releases'),
+        apk: native ? (asset ? asset.browser_download_url
+                              : ('https://github.com/' + REPO + '/releases/latest/download/scale.apk')) : '',
+        size: asset && asset.size ? Math.round(asset.size / 1024) : 0
+      }};
+      syncSheet();
+    })
+    .catch(function(){
+      if (native){
+        ui.sheet = {type:'update', ctx:{tag:'', url:'https://github.com/' + REPO + '/releases/latest',
+          apk:'https://github.com/' + REPO + '/releases/latest/download/scale.apk', size:0, offline:true}};
         syncSheet();
       } else {
-        toast('已是最新版本 v' + APP_VERSION);
+        toast('检查失败：可能没有联网');
       }
-    })
-    .catch(function(){ toast('检查失败：可能没有联网'); });
+    });
 }
 function sheetUpdate(){
   var c = ui.sheet.ctx;
-  return sheetWrap('发现新版本 v' + c.tag,
-    '<div class="pre">当前版本 <b>v' + APP_VERSION + '</b><br>最新版本 <b>v' + c.tag + '</b></div>' +
-    '<button class="primary" data-act="open-release">打开发布页</button>' +
-    '<div class="note">网页版可以直接刷新；APK 需要下载新的安装包覆盖安装，数据会保留。</div>');
+  if (!c.tag){
+    return sheetWrap('检查更新',
+      '<div class="pre">没查到版本号，可能没联网。<br>可以直接下载最新安装包试试，覆盖安装不会丢数据。</div>' +
+      '<button class="primary" data-act="download-apk">直接下载最新版</button>' +
+      '<button class="ghost" data-act="open-release">去 Release 页面看看</button>');
+  }
+  var sizeTxt = c.size ? ('约 ' + c.size + ' KB') : '';
+  var head = c.offline ? '可能是新版本' : ('发现新版本 v' + c.tag);
+  var body = '<div class="pre">当前版本 <b>v' + APP_VERSION + '</b><br>' +
+    (c.offline ? ('最新版本 <b>未知</b>') : ('最新版本 <b>v' + c.tag + '</b>' + (sizeTxt ? ' · ' + sizeTxt : ''))) +
+    '</div>';
+  if (c.apk){
+    body += '<button class="primary" data-act="download-apk">下载并安装</button>' +
+            '<button class="ghost" data-act="open-release">去 Release 页面</button>' +
+            '<div class="note">下载在后台进行，完成后系统会弹出安装器。覆盖安装，数据不会丢。' +
+            '第一次可能要求你允许「刻度」安装未知应用。</div>';
+  } else {
+    body += '<button class="primary" data-act="open-release">打开发布页</button>' +
+            '<div class="note">网页版刷新即可拿到新版；APK 去 Release 下载覆盖安装，数据会保留。</div>';
+  }
+  return sheetWrap(head, body);
 }
 /* ---- 导入 JSON ---- */
 function sheetImport(){
@@ -2287,6 +2326,17 @@ document.addEventListener('click', function(ev){
   if (act === 'import-replace'){ doImport('replace'); return; }
   if (act === 'lang'){ setLanguage(el.getAttribute('data-v')); return; }
   if (act === 'check-update'){ checkUpdate(); return; }
+  if (act === 'download-apk'){
+    var ca = ui.sheet && ui.sheet.ctx;
+    ui.sheet = null; syncSheet();
+    if (ca && ca.apk && canInstall()){
+      try { window.AndroidApp.installApk(ca.apk, ca.tag || 'latest'); }
+      catch (e) { toast('下载失败：' + e.message); }
+    } else if (ca && ca.url){
+      window.open(ca.url, '_blank');
+    }
+    return;
+  }
   if (act === 'open-release'){
     var uu = ui.sheet && ui.sheet.ctx && ui.sheet.ctx.url;
     ui.sheet = null; syncSheet();

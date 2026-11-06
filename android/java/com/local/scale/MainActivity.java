@@ -1,14 +1,18 @@
 package com.local.scale;
 
 import android.app.Activity;
+import android.content.ContentProvider;
 import android.content.ContentValues;
 import android.content.Intent;
+import android.database.Cursor;
 import android.graphics.Color;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
+import android.os.ParcelFileDescriptor;
 import android.provider.MediaStore;
+import android.provider.Settings;
 import android.view.View;
 import android.view.ViewGroup;
 import android.webkit.JavascriptInterface;
@@ -20,8 +24,12 @@ import android.webkit.WebViewClient;
 import android.widget.Toast;
 
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
+import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
 
 public class MainActivity extends Activity {
 
@@ -105,6 +113,42 @@ public class MainActivity extends Activity {
         }
     }
 
+    private void tip(final String msg) {
+        runOnUiThread(new Runnable() {
+            public void run() { Toast.makeText(MainActivity.this, msg, Toast.LENGTH_LONG).show(); }
+        });
+    }
+
+    /** 下载完 apk 后拉起系统安装器 */
+    private void launchInstaller(File apk) {
+        if (Build.VERSION.SDK_INT >= 26) {
+            boolean ok = false;
+            try { ok = getPackageManager().canRequestPackageInstalls(); } catch (Exception ignored) {}
+            if (!ok) {
+                Toast.makeText(this, "请允许「刻度」安装未知应用，回来再点一次检查更新", Toast.LENGTH_LONG).show();
+                try {
+                    startActivity(new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                            Uri.parse("package:" + getPackageName())));
+                } catch (Exception ignored) {}
+                return;
+            }
+        }
+        Uri uri = new Uri.Builder()
+                .scheme("content")
+                .authority(ApkProvider.AUTHORITY)
+                .appendPath("updates")
+                .appendPath(apk.getName())
+                .build();
+        Intent i = new Intent(Intent.ACTION_VIEW);
+        i.setDataAndType(uri, "application/vnd.android.package-archive");
+        i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
+        try {
+            startActivity(i);
+        } catch (Exception e) {
+            Toast.makeText(this, "打不开安装器：" + e.getMessage(), Toast.LENGTH_LONG).show();
+        }
+    }
+
     /** 给网页用的导出接口：把 JSON 写到系统“下载”目录 */
     public class Bridge {
         @JavascriptInterface
@@ -159,6 +203,50 @@ public class MainActivity extends Activity {
             } catch (Exception e) { /* 没有浏览器就算了 */ }
         }
 
+        /** 下载更新包并拉起安装器；成功与否都通过 Toast 告诉用户 */
+        @JavascriptInterface
+        public void installApk(final String url, final String tag) {
+            tip("正在下载更新 v" + tag + "…");
+            new Thread(new Runnable() {
+                public void run() {
+                    try {
+                        File dir = new File(getExternalFilesDir(null), "updates");
+                        if (!dir.exists()) dir.mkdirs();
+                        File out = new File(dir, "update-" + tag + ".apk");
+                        if (out.exists() && !out.delete()) out = new File(dir, "update-" + tag + "-b.apk");
+
+                        HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
+                        c.setInstanceFollowRedirects(true);
+                        c.setConnectTimeout(20000);
+                        c.setReadTimeout(60000);
+                        c.setRequestProperty("User-Agent", "scale-app");
+                        c.connect();
+                        int code = c.getResponseCode();
+                        if (code != 200) throw new Exception("HTTP " + code);
+
+                        InputStream in = c.getInputStream();
+                        FileOutputStream fo = new FileOutputStream(out);
+                        byte[] buf = new byte[16384];
+                        int n;
+                        long total = 0;
+                        while ((n = in.read(buf)) > 0) { fo.write(buf, 0, n); total += n; }
+                        fo.flush();
+                        fo.close();
+                        in.close();
+                        c.disconnect();
+
+                        if (total < 20000) throw new Exception("文件太小");
+                        final File apk = out;
+                        runOnUiThread(new Runnable() {
+                            public void run() { launchInstaller(apk); }
+                        });
+                    } catch (final Exception e) {
+                        tip("下载失败：" + e.getMessage() + "（可去 Release 页面手动下载）");
+                    }
+                }
+            }).start();
+        }
+
         @JavascriptInterface
         public void toast(final String msg) {
             runOnUiThread(new Runnable() {
@@ -182,6 +270,36 @@ public class MainActivity extends Activity {
             os.flush();
             os.close();
             return "下载/" + name;
+        }
+    }
+
+    /** 极简 FileProvider：把 app 私有目录里的 apk 以 content:// 交给系统安装器 */
+    public static class ApkProvider extends ContentProvider {
+        public static final String AUTHORITY = "com.local.scale.apk";
+
+        @Override
+        public boolean onCreate() { return true; }
+
+        @Override
+        public Cursor query(Uri uri, String[] projection, String sel, String[] args, String order) { return null; }
+
+        @Override
+        public String getType(Uri uri) { return "application/vnd.android.package-archive"; }
+
+        @Override
+        public Uri insert(Uri uri, ContentValues values) { return null; }
+
+        @Override
+        public int delete(Uri uri, String sel, String[] args) { return 0; }
+
+        @Override
+        public int update(Uri uri, ContentValues values, String sel, String[] args) { return 0; }
+
+        @Override
+        public ParcelFileDescriptor openFile(Uri uri, String mode) throws FileNotFoundException {
+            File base = getContext().getExternalFilesDir(null);
+            File f = new File(base, uri.getPath());
+            return ParcelFileDescriptor.open(f, ParcelFileDescriptor.MODE_READ_ONLY);
         }
     }
 }

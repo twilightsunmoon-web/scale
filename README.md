@@ -58,7 +58,7 @@
 
 到本仓库的 **Releases** 页面下载 `scale.apk` 安装。装好之后数据存在应用私有目录里，不会被浏览器清掉。
 
-- 不需要任何权限，包括联网权限
+- 只申请两个权限：**联网**（仅用于你主动点「检查更新」时的版本查询与下载）和**安装未知应用**（用于覆盖安装更新）。除此之外不产生任何请求
 - 导出 JSON 会写到系统「下载」文件夹
 
 **3. 在线版（推荐分享这一条）**
@@ -69,7 +69,7 @@
 
 ## 数据
 
-- **全部在本地。** 没有账号、没有服务器、没有任何网络请求。
+- **数据在本地。** 没有账号、没有服务器；除了你主动点「检查更新」那一下，不产生任何网络请求。
 - 存储双写：`localStorage` + （APK 内）应用私有目录的 `state.json`。前者读不到时自动回退到后者。
 - 设置里有：导出 JSON（含全部历史）、**导入 JSON**、清空历史（二次确认）、撤销上一次登记。
 - 导入有两种：**合并**只补本机没有的记录（按 id 判重）；**覆盖**用文件里的刻度、预设和全部历史替换本机数据（界面语言保持不变）。换手机就靠这个。
@@ -117,7 +117,7 @@ It answers one question and stops there: **can I start another round?** It will 
 
 - **Live version:** <https://twilightsunmoon-web.github.io/scale/> — open on your phone and *Add to Home Screen*.
 - One file. Open `index.html` in any browser, works offline, loads nothing external.
-- Or install `scale.apk` from Releases — **no permissions at all, not even internet**.
+- Or install `scale.apk` from Releases — it asks for exactly two permissions: **internet** (only when you tap *check for updates*) and **install unknown apps** (to apply an update). Nothing else leaves the device.
 - UI in Chinese and English; choose on first launch, change it any time in Settings.
 - Your data stays on your device: `localStorage`, plus a private file in the Android build as a second copy. Export to JSON whenever you like, and **import** it back (merge by id, or replace everything) when you switch devices.
 
