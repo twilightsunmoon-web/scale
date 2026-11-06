@@ -21,3 +21,10 @@ desktop.ini
 .idea/
 .vscode/
 *.log
+
+# 本地临时测试文件
+_*.js
+_*.html
+_*.png
+_*.py
+_*.md
