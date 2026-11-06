@@ -307,7 +307,7 @@ td.num{font-variant-numeric:tabular-nums; white-space:nowrap;}
 /* ================= 常量 ================= */
 var RESET_HOUR = 4;                 /* 每日 04:00 本地时区结算 */
 var KEY = 'scale.ledger.v1';
-var APP_VERSION = '1.1.2';
+var APP_VERSION = '1.1.3';
 var REPO = 'twilightsunmoon-web/scale';
 var WEEK_ZH = ['周日','周一','周二','周三','周四','周五','周六'];
 var WEEK_EN = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
@@ -574,6 +574,17 @@ var EN = {
   '文件里没有可用的记录':'No usable records in that file',
   '改成':'to',
 
+  '新增事件':'Add activity',
+  '名称':'Name',
+  '所属列':'Column',
+  '这一项多少分钟见底':'How long until it bottoms out',
+  '白名单不计入任何额度，不用填系数（睡眠、散步这类）。':'White-list activities count toward nothing — no coefficients needed (sleep, walk and the like).',
+  '结束方式':'How it ends',
+  '保存这个事件':'Save this activity',
+  '存好之后会出现在「登记一场」里，也可以再去预设表里改。':'It will show up in “Log a session”, and you can still edit it in the preset table.',
+  '先给这个事件起个名字':'Give this activity a name first',
+  '已新增：':'Added: ',
+
   /* 提示语 */
   '本地存储写入失败':'Could not write local storage',
   '这一项现在不可开':'That one is closed right now',
@@ -598,6 +609,10 @@ var EN = {
 
 /* 动态串：先跑正则，再做短语替换 */
 var ENR = [
+  [/「整天只做这一项，多少分钟后这条线见底」——系数 = 阈值 ÷ 这个分钟数（当前精力 ([\d.]+) \/ 注意力 ([\d.]+)）。/g,
+    '“If today were only this activity, how long before the line is hit” — coefficient = threshold ÷ that many minutes (energy $1 / attention $2).'],
+  [/登记 (\d+) 分钟 ≈ 精力 ([\d.]+) 点 · 注意力 ([\d.]+) 点/g,
+    '$1 min ≈ energy $2 pts · attention $3 pts'],
   [/预留 (\d+) 分/g, 'reserved $1 min'],
   [/预留 (\d+) min/g, 'reserved $1 min'],
   [/每日 (\d{2}):00 结算/g, 'daily reset $1:00'],
@@ -1839,6 +1854,7 @@ function syncSheet(){
   else if (ui.sheet.type === 'entry') body = sheetEntry();
   else if (ui.sheet.type === 'update') body = sheetUpdate();
   else if (ui.sheet.type === 'import') body = sheetImport();
+  else if (ui.sheet.type === 'newpreset') body = sheetNewPreset();
   l.innerHTML = '<div class="scrim" data-act="close-sheet"></div>' +
                 '<div class="sheet-wrap"><div class="sheet' + (prev ? ' still' : '') + '">' + body + '</div></div>';
   if (prev && keepTop){
@@ -1847,6 +1863,7 @@ function syncSheet(){
   }
   applyLang(l);
   if (ui.sheet && ui.sheet.type === 'entry') refreshEditPreview();
+  if (ui.sheet && ui.sheet.type === 'newpreset') refreshNewPreset();
 }
 function toast(msg){
   var t = document.getElementById('toast');
@@ -2079,6 +2096,86 @@ function doImport(mode){
   toast('已合并：新增 ' + addE + ' 条登记' + (addB ? '、' + addB + ' 个冻结块' : ''));
 }
 
+/* ---- 新增事件：当场按等效分钟算这一项的系数 ---- */
+function sheetNewPreset(){
+  var c = ui.sheet.ctx;
+  var eT = Number(S.config.energyThr) || 0;
+  var aT = Number(S.config.attentionThr) || 0;
+  var white = (c.column === 'white');
+
+  var cols = ['high','low','white'].map(function(v){
+    return '<button class="' + (c.column === v ? 'on' : '') + '" data-act="np-col" data-v="' + v + '">' +
+      colLabel(v) + '</button>';
+  }).join('');
+
+  var coefPart;
+  if (white){
+    coefPart = '<div class="note" style="margin-top:12px">白名单不计入任何额度，不用填系数（睡眠、散步这类）。</div>';
+  } else {
+    coefPart =
+      '<div class="calc-line"><span>精力</span>' +
+        '<input type="number" inputmode="numeric" min="1" max="1440" value="' + c.eMin + '" id="np-emin">' +
+        '<i>分钟</i><b id="np-ecoef">→ ' + fmtPts(c.eCoef) + '</b></div>' +
+      '<div class="calc-line"><span>注意力</span>' +
+        '<input type="number" inputmode="numeric" min="1" max="1440" value="' + c.aMin + '" id="np-amin">' +
+        '<i>分钟</i><b id="np-acoef">→ ' + fmtPts(c.aCoef) + '</b></div>' +
+      '<div class="pre" id="np-pre" style="margin-top:12px"></div>';
+  }
+
+  var body = '' +
+    '<div class="subhd">名称</div>' +
+    '<input class="txtin" id="np-name" type="text" value="' + esc(c.name) + '">' +
+    '<div class="subhd">所属列</div>' +
+    '<span class="seg">' + cols + '</span>' +
+    '<div class="subhd">这一项多少分钟见底</div>' +
+    '<div class="calc-rule">「整天只做这一项，多少分钟后这条线见底」——' +
+      '系数 = 阈值 ÷ 这个分钟数（当前精力 ' + fmtPts(eT) + ' / 注意力 ' + fmtPts(aT) + '）。</div>' +
+    coefPart +
+    '<div class="subhd">结束方式</div>' +
+    '<span class="seg"><button class="' + (c.naturalEnd ? 'on' : '') + '" data-act="np-end" data-v="1">有终点</button>' +
+    '<button class="' + (!c.naturalEnd ? 'on' : '') + '" data-act="np-end" data-v="0">无终点</button></span>' +
+    '<button class="primary" data-act="np-save" style="margin-top:16px">保存这个事件</button>' +
+    '<div class="note">存好之后会出现在「登记一场」里，也可以再去预设表里改。</div>';
+
+  return sheetWrap('新增事件', body);
+}
+function refreshNewPreset(){
+  var c = ui.sheet && ui.sheet.ctx;
+  if (!c) return;
+  var em = document.getElementById('np-emin');
+  var am = document.getElementById('np-amin');
+  var eo = document.getElementById('np-ecoef');
+  var ao = document.getElementById('np-acoef');
+  var pre = document.getElementById('np-pre');
+  if (!em || !am) return;
+  var eT = Number(S.config.energyThr) || 0;
+  var aT = Number(S.config.attentionThr) || 0;
+  var ev = parseFloat(em.value), av = parseFloat(am.value);
+  var eC = clampNum(ev > 0 ? eT / ev : 1, 0, 9, 1);
+  var aC = clampNum(av > 0 ? aT / av : 1, 0, 9, 1);
+  c.eCoef = eC; c.aCoef = aC;
+  if (eo) eo.textContent = '→ ' + fmtPts(eC);
+  if (ao) ao.textContent = '→ ' + fmtPts(aC);
+  if (pre){
+    pre.innerHTML = '登记 60 分钟 ≈ 精力 <b>' + fmtPts(60 * eC) + '</b> 点 · 注意力 <b>' + fmtPts(60 * aC) + '</b> 点';
+  }
+}
+function saveNewPreset(){
+  var c = ui.sheet && ui.sheet.ctx;
+  if (!c) return;
+  var nameEl = document.getElementById('np-name');
+  var name = String((nameEl && nameEl.value) || '').trim();
+  if (!name){ toast('先给这个事件起个名字'); if (nameEl) nameEl.focus(); return; }
+  var white = (c.column === 'white');
+  var eC = white ? 1 : c.eCoef;
+  var aC = white ? 1 : c.aCoef;
+  S.presets.push({ id: uid(), name: name, column: c.column,
+    energy: eC, attention: aC, naturalEnd: !!c.naturalEnd });
+  ui.sheet = null;
+  save(); render();
+  toast('已新增：' + name);
+}
+
 function undoLast(){
   if (!S.entries.length){ toast('没有可撤销的登记'); return; }
   var e = S.entries[S.entries.length-1];
@@ -2269,15 +2366,21 @@ document.addEventListener('click', function(ev){
     return;
   }
   if (act === 'add-preset'){
-    var np = {id: uid(), name: '新事件', column: 'low', energy: 1, attention: 1, naturalEnd: true};
-    S.presets.push(np);
-    save(); render();
+    ui.sheet = {type:'newpreset', ctx:{
+      name: '新事件', column: 'low', naturalEnd: true,
+      eMin: (Number(S.config.energyThr) || 60), aMin: (Number(S.config.attentionThr) || 60),
+      eCoef: 1, aCoef: 1
+    }};
+    syncSheet();
     requestAnimationFrame(function(){
-      var inp = document.querySelector('[data-pid="' + np.id + '"][data-pfield="name"]');
+      var inp = document.getElementById('np-name');
       if (inp){ inp.focus(); if (inp.select) inp.select(); }
     });
     return;
   }
+  if (act === 'np-col'){ ui.sheet.ctx.column = el.getAttribute('data-v'); syncSheet(); return; }
+  if (act === 'np-end'){ ui.sheet.ctx.naturalEnd = el.getAttribute('data-v') === '1'; syncSheet(); return; }
+  if (act === 'np-save'){ saveNewPreset(); return; }
   if (act === 'export'){ exportJSON(); return; }
   if (act === 'undo'){ undoLast(); return; }
   if (act === 'clear-arm'){ ui.clearArmed = true; render(); return; }
@@ -2297,6 +2400,7 @@ document.addEventListener('input', function(ev){
     }
     return;
   }
+  if (el && (el.id === 'np-emin' || el.id === 'np-amin')){ refreshNewPreset(); return; }
   if (el && el.id === 'ed-min'){ refreshEditPreview(); return; }
   if (el && el.id === 'stopInput' && ui.sheet && ui.sheet.ctx){
     ui.sheet.ctx.stopPoint = el.value;
