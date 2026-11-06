@@ -1,0 +1,23 @@
+# 构建产物
+.build/
+dist/
+android/assets/
+
+# Android 工具链（首次构建自动下载，约 120MB）
+.sdk/
+
+# 签名密钥：绝对不要提交
+tools/scale.keystore
+*.keystore
+*.jks
+
+# WorkBuddy 本地记忆
+.workbuddy/
+
+# 系统 / 编辑器
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/
+*.log

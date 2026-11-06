@@ -1,0 +1,11 @@
+* text=auto
+
+# 保证脚本在 Windows 上 checkout 后仍是 LF，否则 bash 会报 bad interpreter
+*.sh   text eol=lf
+*.html text eol=lf
+*.md   text eol=lf
+*.java text eol=lf
+*.xml  text eol=lf
+
+*.png  binary
+*.apk  binary
