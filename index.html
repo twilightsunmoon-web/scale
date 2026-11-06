@@ -240,6 +240,8 @@ td.num{font-variant-numeric:tabular-nums; white-space:nowrap;}
   padding-bottom:env(safe-area-inset-bottom); animation:up .2s ease-out;
 }
 @keyframes up{from{transform:translateY(16px); opacity:.5;} to{transform:none; opacity:1;}}
+/* 弹层里再点按钮时整块重绘：不能重播入场动画，否则背景会透出来闪一下 */
+.sheet.still{animation:none;}
 .sheet-hd{display:flex; align-items:center; justify-content:space-between; padding:16px 18px 12px; border-bottom:1px solid var(--line2);}
 .sheet-hd b{font-size:15px; font-weight:600;}
 .sheet-hd .x{background:none; border:0; color:var(--ink3); font-size:13.5px; padding:6px 0 6px 10px;}
@@ -305,7 +307,7 @@ td.num{font-variant-numeric:tabular-nums; white-space:nowrap;}
 /* ================= 常量 ================= */
 var RESET_HOUR = 4;                 /* 每日 04:00 本地时区结算 */
 var KEY = 'scale.ledger.v1';
-var APP_VERSION = '1.1.0';
+var APP_VERSION = '1.1.1';
 var REPO = 'twilightsunmoon-web/scale';
 var WEEK_ZH = ['周日','周一','周二','周三','周四','周五','周六'];
 var WEEK_EN = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
@@ -1802,6 +1804,15 @@ function render(){
 function syncSheet(){
   var l = document.getElementById('layer');
   if (!ui.sheet){ l.innerHTML = ''; return; }
+
+  /* 已经有一层弹层时，这次只是内容刷新：不重播动画，也不把滚动位置甩回顶部 */
+  var prev = l.querySelector('.sheet');
+  var keepTop = 0;
+  if (prev){
+    var bd0 = prev.querySelector('.sheet-bd');
+    if (bd0) keepTop = bd0.scrollTop;
+  }
+
   var body = '';
   if (ui.sheet.type === 'register') body = sheetRegister();
   else if (ui.sheet.type === 'blocks') body = sheetBlocks();
@@ -1810,7 +1821,11 @@ function syncSheet(){
   else if (ui.sheet.type === 'entry') body = sheetEntry();
   else if (ui.sheet.type === 'update') body = sheetUpdate();
   l.innerHTML = '<div class="scrim" data-act="close-sheet"></div>' +
-                '<div class="sheet-wrap"><div class="sheet">' + body + '</div></div>';
+                '<div class="sheet-wrap"><div class="sheet' + (prev ? ' still' : '') + '">' + body + '</div></div>';
+  if (prev && keepTop){
+    var bd1 = l.querySelector('.sheet-bd');
+    if (bd1) bd1.scrollTop = keepTop;
+  }
   applyLang(l);
   if (ui.sheet && ui.sheet.type === 'entry') refreshEditPreview();
 }
