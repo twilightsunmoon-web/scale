@@ -1,18 +1,20 @@
 # 刻度 · 时间与注意力额度记账
 
-一个单文件的本地记账工具：**把「后台一直惦记还剩多少」变成按需读一眼的查询。**
-
-你只在开局前登记一次，之后不回看、不补记、不追评。它是刻度尺，不是监工——上限由你自己定，程序不推荐数值、不加回血额度、不做成就和连续打卡。
+> 备考时真正消耗人的，往往不是玩了多久，而是「我是不是已经玩太多了」这个念头一直在后台跑。
+>
+> 刻度想把那个念头变成一次查询：登记一次，之后不回看、不补记、不追评；打开只看结论，看完就能照做，不在现场做任何判断。
+>
+> 它的硬约束只有三条，前者否决后者：每日时间上限、精力与注意力双阈值、联机预约冻结块。上限由你自己定，程序不推荐数值、不加娱乐补时、不设成就与连续打卡。
+>
+> 界面是三根水位柱：柱高就是阈值，水位就是今天已经用掉的。没有登记时是空的。
+>
+> 它是刻度尺，不是监工。
 
 ![首页](docs/home.png)
 
+<p align="center"><sub>中文 / English · 首次打开选一次，之后在设置里改 · <a href="#english">English ↓</a></sub></p>
+
 ---
-
-## 它解决什么
-
-备考期间真正消耗人的，往往不是玩了多久，而是「我是不是已经玩太多了」这个念头一直在后台跑。
-
-这个工具把那个念头变成三个数字和一句话：打开只看一眼结论，看完就能照做，不在现场做任何判断。
 
 ## 三条规则（前者否决后者）
 
@@ -93,6 +95,33 @@ bash tools/build-apk.sh
 - 单机单用户，**没有云同步**（这是刻意的）。换设备需要导出 JSON 手动带走。
 - 时长是你在开局前填的**预估**，不追踪真实使用，也不做自动计时。
 - 历史按「开始日期」归属，跨零点的登记不拆分。
+
+---
+
+## English
+
+**Scale** is a single-file, offline ledger for time and attention.
+
+<img src="docs/home-en.png" width="300" alt="English UI">
+
+You log once before you start; it deducts time, energy and attention separately, then you close it. Next time it shows three numbers and one sentence: *you can start another round* — or *you're done for today*. No notifications, no scores, no streaks, no cloud.
+
+It answers one question and stops there: **can I start another round?** It will not nag you, rate you, or talk you into "just five more minutes".
+
+- One file. Open `index.html` in any browser, works offline, loads nothing external.
+- Or install `scale.apk` from Releases — **no permissions at all, not even internet**.
+- UI in Chinese and English; choose on first launch, change it any time in Settings.
+- Your data stays on your device: `localStorage`, plus a private file in the Android build as a second copy. Export to JSON whenever you like.
+
+Three rules, each overriding the one after it:
+
+| # | Rule | What it means |
+|---|---|---|
+| 1 | **Daily time cap** | The only hard time gate. Resets at 04:00 local, no rollover |
+| 2 | **Energy & attention thresholds** | Two independent point budgets; the first one hit decides whether the *next* session may start. Never cuts a session short |
+| 3 | **Frozen blocks** | Online play can only happen in certain windows. A reservation is earmarked against that day's quota only, and a no-show is fixed in advance (postpone or void) |
+
+*Blocks are gauges, not a supervisor.*
 
 ## License
 

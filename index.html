@@ -305,9 +305,17 @@ td.num{font-variant-numeric:tabular-nums; white-space:nowrap;}
 /* ================= 常量 ================= */
 var RESET_HOUR = 4;                 /* 每日 04:00 本地时区结算 */
 var KEY = 'scale.ledger.v1';
-var WEEK = ['周日','周一','周二','周三','周四','周五','周六'];
-var COL_LABEL = {high:'高消耗', low:'低消耗', white:'白名单'};
+var APP_VERSION = '1.1.0';
+var REPO = 'twilightsunmoon-web/scale';
+var WEEK_ZH = ['周日','周一','周二','周三','周四','周五','周六'];
+var WEEK_EN = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+var MON_EN = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+var COL_ZH = {high:'高消耗', low:'低消耗', white:'白名单'};
+var COL_EN = {high:'High', low:'Low', white:'White-list'};
 var COL_DESC  = {high:'到线即不可再开', low:'到线后仍可开', white:'带物理终点，不计入'};
+
+/* 语言：'zh' | 'en'。中文文案写在源码里，英文靠字典在渲染后替换 */
+var LANG = 'zh';
 
 var PRESET_SEED = [
   {id:'p_phone', name:'玩手机',                 column:'high',  energy:2, attention:3, naturalEnd:false},
@@ -320,6 +328,311 @@ var PRESET_SEED = [
   {id:'p_walk',  name:'散步',                   column:'white', energy:1, attention:1, naturalEnd:true},
   {id:'p_bath',  name:'洗澡',                   column:'white', energy:1, attention:1, naturalEnd:true}
 ];
+
+/* ---------- 英文词典（按整串或短语替换；长的优先） ---------- */
+var EN = {
+  /* 活动名 */
+  '玩手机':'Phone / feed',
+  '打游戏（含和朋友联机）':'Gaming (incl. online)',
+  '听音乐':'Music',
+  '看书':'Reading',
+  '钻研冷门领域':'Rabbit holes',
+  '睡眠':'Sleep',
+  '闭眼':'Eyes closed',
+  '散步':'Walk',
+  '洗澡':'Shower',
+
+  /* 列 */
+  '高消耗':'High cost',
+  '低消耗':'Low cost',
+  '白名单':'White-list',
+  '到线后仍可开':'still open after the line',
+  '到线即不可再开':'locked after the line',
+  '带物理终点，不计入':'physical end point, not counted',
+
+  /* 首页 */
+  '可以开下一场':'You can start another round',
+  '高消耗 / 低消耗 都可登记':'High and low cost are both open',
+  '当日已触线 · 仅低消耗':'Line reached · low cost only',
+  '当日已触线 · 时间用尽':'Line reached · time used up',
+  '精力与注意力都到阈值':'energy and attention are both at the line',
+  '精力到阈值':'energy is at the line',
+  '注意力到阈值':'attention is at the line',
+  '，剩余时间只流向低消耗':', the rest of today goes to low cost only',
+  '，且时间已用尽':', and the time cap is used up',
+  '今天的额度到这里':'the quota ends here for today',
+  '起身倒水':'Stand up, pour water',
+  '正事只做开头 2 分钟':'then do just the first 2 minutes of the real thing',
+  '今天登记过信息流类（无自然终点）：到线即锁屏':'You logged a feed-type activity today (no natural end): lock the screen at the line',
+  '下一冻结块':'Next frozen block',
+  '登记一场':'Log a session',
+  '预约联机（冻结块）':'Reserve online play (frozen block)',
+  '回顾':'Review',
+  '设置':'Settings',
+  '拖动柱子顶端 = 直接改这一项的阈值':'Drag the top of a column to change its threshold',
+  '剩 ':'left ',
+  '时间':'Time',
+  '精力':'Energy',
+  '注意力':'Attention',
+  '无':'none',
+  '本机存储':'on this device',
+
+  /* 首次设定 */
+  '先把刻度定下来':'Set your scale first',
+  '精力与注意力已按你定的 200 预填，随时可改；每日上限由你填。':'Energy and attention are prefilled with your 200; the daily time cap is yours to fill.',
+  '每日上限':'Daily cap',
+  '分钟，唯一的硬时间闸门':'minutes — the only hard gate',
+  '精力阈值':'Energy threshold',
+  '点 = 分钟 × 精力系数':'points = minutes × energy coefficient',
+  '注意力阈值':'Attention threshold',
+  '点 = 分钟 × 注意力系数':'points = minutes × attention coefficient',
+  '阈值定下来之后，每个活动的系数可以在设置里用「按等效分钟算系数」反推：系数 = 阈值 ÷ 整日等效分钟。':'Once the thresholds are set, derive each activity coefficient in Settings → "Coefficients from minutes": coefficient = threshold ÷ minutes-to-exhaustion.',
+  '用这套刻度开始':'Start with this scale',
+
+  /* 回顾 */
+  '点行可修正':'tap a row to edit',
+  '每日':'Daily',
+  '总览':'Overview',
+  '未触线':'under the line',
+  '未到':'not yet',
+  '时间用尽':'time used up',
+  '精力触线':'energy line',
+  '注意力触线':'attention line',
+  '时刻':'Time',
+  '活动':'Activity',
+  '分':'min',
+  '剩':'left',
+  '当前阈值':'Current thresholds —',
+  '精':'E',
+  '注':'A',
+  '列':'Col',
+  '冻结块':'Frozen',
+  '绑锁屏':'locks screen',
+  '停点':'stop point',
+  '不计入':'not counted',
+  '改过':'edited',
+  '已删':'deleted',
+  '恢复':'Restore',
+  '当天只有冻结块，没有登记。':'Only a frozen block that day, no sessions logged.',
+  '收起已删除':'hide deleted',
+  '还没任何登记。':'No entries yet.',
+  '还没有任何登记。':'No entries yet.',
+  '触线：':'Line: ',
+  '时间到上限':'time cap at ',
+  '当日未触线':'no line reached',
+  '外置停点：':'Stop point: ',
+  '冻结块：':'Frozen blocks: ',
+  '点某一行可以修正它（活动 / 时长 / 开始时间）或删掉；改动会留原始值，不静默覆盖。':'Tap a row to correct it (activity / duration / start time) or delete it. Edits keep the original value.',
+  '近 7 天':'7 days',
+  '近 30 天':'30 days',
+  '全部':'All',
+  '这个范围内没有登记。':'No entries in this range.',
+  '浅色底 = 当日上限':'light track = daily cap',
+
+  /* 设置 */
+  '刻度（也能在首页直接拖柱子改）':'Scale (also draggable on the home screen)',
+  '点 = 分钟 × 系数。改后今天即生效；已过去的日子保留当时的刻度。':'points = minutes × coefficient. Changes apply today; past days keep their own scale.',
+  '下次联机窗口（爽约“顺延”落在这里）':'Next online window (a "postponed" no-show lands here)',
+  '日期':'Date',
+  '开始':'Start',
+  '结束':'End',
+  '新建预约时默认兜底':'No-show fallback',
+  '写死在每一条预约里，爽约时不再问':'fixed per reservation, never asked again',
+  '顺延到下次窗口':'postpone',
+  '直接归零':'void it',
+  '活动预设表（系数自己填，0–9，可带小数）':'Activity presets (free coefficients, 0–9, decimals fine)',
+  '按等效分钟算系数':'Coefficients from minutes',
+  '＋ 新增自定义事件':'＋ Add custom activity',
+  '数据':'Data',
+  '导出 JSON（含全部历史）':'Export JSON (all history)',
+  '撤销上一次登记（无记录）':'Undo last entry (none)',
+  '一键清空历史':'Clear all history',
+  '确认清空':'Clear it',
+  '取消':'Cancel',
+  '回到首页':'Back to home',
+  '语言':'Language',
+  '检查更新':'Check for updates',
+  '版本':'Version',
+  '删除':'Delete',
+  '有终点':'has end',
+  '无终点':'no end',
+  '白名单：不计入任何额度':'White-list: counts toward nothing',
+  '精力系数':'energy',
+  '注意力系数':'attention',
+
+  /* 弹层：登记 */
+  '关闭':'Close',
+  '最近':'Recent',
+  '不计入任何额度':'counts toward nothing',
+  '已触线 · 不可开':'line reached · locked',
+  '先选一项。':'Pick one first.',
+  '选完只确认一次，玩中不用再回来。':'Confirm once; you will not come back mid-session.',
+  '时长':'Duration',
+  '外置停点（开局前写下，登记后不再改）':'Stop point (write it before you start; not editable later)',
+  '停在你自己写的这句话上，不靠当场判断。':'Stop on the sentence you wrote, not on an in-the-moment judgement.',
+  '无自然终点（信息流类）：到线即绑锁屏。':'No natural end (feed type): lock the screen at the line.',
+  '登记':'Log it',
+  '登记完就关掉。玩中不回看、玩完不补记。':'Close it after logging. No glancing mid-session, no backfilling.',
+  '登记后即触线':'This crosses the line as soon as it is logged',
+  '这一项没有自然终点：到线即锁屏':'This one has no natural end: lock the screen at the line',
+  '白名单：':'White-list: ',
+  ' 记入当天归档，':' logged to the archive, ',
+  '不扣':'deducting nothing from ',
+  '时间 / 精力 / 注意力。':'time / energy / attention.',
+
+  /* 弹层：冻结块 */
+  '还没有冻结块。':'No frozen blocks yet.',
+  '新建预约':'New reservation',
+  '已预留':'reserved',
+  '已发生':'taken place',
+  '爽约 · 顺延':'no-show · postponed',
+  '爽约 · 归零':'no-show · voided',
+  '已取消':'cancelled',
+  '待排窗口':'awaiting a window',
+  '开始这一场':'Start this session',
+  '爽约':'No-show',
+  '取消预约':'Cancel reservation',
+  '兜底：':'fallback: ',
+  '顺延':'postpone',
+  '归零':'void',
+  '绑 ':'on ',
+
+  /* 弹层：预约 */
+  '预约联机':'Reserve online play',
+  '预约日期':'Date',
+  '时段':'Window',
+  '时长（分钟）':'Duration (minutes)',
+  '爽约兜底（写死在这一次预约里，之后不再选）':'No-show fallback (fixed in this reservation, never chosen again)',
+  '两种都不会解冻回自由池。默认取设置里的默认值，可在这里改一次。':'Neither returns the quota to the free pool. Defaults come from Settings; you can change it once here.',
+  '该日已登记':'That day has',
+  '加上这一场':'with this session',
+  '会撞破：':'Would break: ',
+  '不吃紧':'comfortable',
+  '这一场只划入 ':'This session is earmarked for ',
+  ' 的额度，不占其他日期，也不要求今天先省着花。':' only. It takes nothing from other days, and you do not have to save up today.',
+  '锁进日历':'Lock it into the calendar',
+  '预留时已经预判过是否撞破当日双阈值；此后不每天重判。':'The double threshold was checked when you reserved. It is not re-judged daily.',
+
+  /* 弹层：修正 */
+  '修正这一条':'Correct this entry',
+  '这条已经被删除了。':'This entry has been deleted.',
+  '这条已不存在。':'This entry no longer exists.',
+  '开始时刻':'Start time',
+  '外置停点':'Stop point',
+  '会变成：':'Becomes: ',
+  '填一个大于 0 的分钟数。':'Enter a duration above 0.',
+  '这一项已从预设表移除，只能改时长或删除。':'This activity was removed from presets; you can only change the duration or delete it.',
+  '原始值':'Original',
+  '改过 ':'edited ',
+  ' 次':' times',
+  '保存修改':'Save',
+  '删除这一条':'Delete this entry',
+  '改完只动这一条，不动阈值和其他记录。删除后可以在当天的「已删除」里恢复。':'Only this entry changes. Deleted entries can be restored from that day.',
+
+  /* 弹层：计算器 */
+  '规则：':'Rule: ',
+  '系数 = 阈值 ÷ 等效分钟':'coefficient = threshold ÷ minutes-to-exhaustion',
+  '当前阈值 精力 ':'Current thresholds — energy ',
+  '（在设置里改，这里跟着变）':'(change them in Settings; this follows)',
+  '「等效分钟」= 假定整天只做这一项，多少分钟后这条线见底。留空 = 这一项不改。':'"Minutes" = if today were only this activity, how long before the line is hit. Leave blank to keep the current value.',
+  '（上限截断）':'(capped at 9)',
+  '不改':'unchanged',
+  '白名单不计入任何额度，已跳过。系数上限 9。':'White-list activities count toward nothing and are skipped. Coefficients cap at 9.',
+  '写入这些系数':'Write these coefficients',
+  '只改系数，不动阈值，也不动已经登记过的历史。':'Only coefficients change — not thresholds, not logged history.',
+
+  '分':'min',
+  '剩':'left',
+  '当前阈值':'Current thresholds —',
+  '点':'pts',
+  '分钟':'minutes',
+  '天':'days',
+  '通用':'General',
+  '新增后立刻出现在首页「登记一场」里，常用项会排在最上面。系数只在这里手改，程序不会自动调。“无终点”= 没有自然结束点：高消耗列的无终点活动到线即绑锁屏；低消耗列的无终点活动，开局前必须先写下外置停点。':'New activities show up in "Log a session" right away, most-used on top. Coefficients are edited here only — nothing is auto-tuned. "No end" means no natural stopping point: in the High-cost column it locks the screen at the line; in the Low-cost column you must write a stop point before starting.',
+  '检查更新只在点这一下时联网；平时完全不发请求。':'Checking for updates is the only moment it goes online; otherwise it sends no requests at all.',
+
+  /* 提示语 */
+  '本地存储写入失败':'Could not write local storage',
+  '这一项现在不可开':'That one is closed right now',
+  '先写下外置停点':'Write the stop point first',
+  '没有可撤销的登记':'Nothing to undo',
+  '历史已清空':'History cleared',
+  '预设已删除（历史记录不受影响）':'Preset deleted (history untouched)',
+  '已恢复':'Restored',
+  '没有改动':'Nothing changed',
+  '已修改（原始值已保留）':'Saved (original kept)',
+  '已删除，可在当天的「已删除」里恢复':'Deleted — restorable from that day',
+  '已导出':'Exported',
+  '已取消预约':'Reservation cancelled',
+  '三个数都要填':'All three numbers are required',
+  '没有可写入的项':'Nothing to write',
+  '检查失败：可能没有联网':'Check failed — are you offline?',
+  '没有找到发布版本':'No release found',
+  '已是最新版本 ':'Up to date — ',
+  '正在检查…':'Checking…',
+  '已打开 Releases 页面，看最新版本号':'Opened the Releases page — compare the version there'
+};
+
+/* 动态串：先跑正则，再做短语替换 */
+var ENR = [
+  [/预留 (\d+) 分/g, 'reserved $1 min'],
+  [/预留 (\d+) min/g, 'reserved $1 min'],
+  [/每日 (\d{2}):00 结算/g, 'daily reset $1:00'],
+  [/(\d+) 小时 (\d+) 分/g, '$1h $2m'],
+  [/(\d+) 小时/g, '$1h'],
+  [/(\d+) 分(?!钟)/g, '$1 min'],
+  [/剩余 (\d+) 分钟/g, '$1 min left'],
+  [/已删除 (\d+) 条 · 显示/g, 'deleted $1 · show'],
+  [/ · 预留 (\d+) 分/g, ' · $1 min reserved'],
+  [/（含今日预留 (\d+) 分）/g, ' (incl. $1 min reserved today)'],
+  [/(\d+) 月 (\d+) 日/g, '$1/$2'],
+  [/今天 ([0-9]{2}:[0-9]{2})/g, 'today $1'],
+  [/明天 ([0-9]{2}:[0-9]{2})/g, 'tomorrow $1'],
+  [/(\d+) 条/g, '$1 entries'],
+  [/(\d+) 次/g, '$1'],
+  [/(\d+) 个系数/g, '$1 coefficients'],
+  [/(\d+) 天/g, '$1 days']
+];
+
+function tr(s){
+  if (LANG !== 'en' || !s) return s;
+  var raw = String(s);
+  var lead = raw.match(/^\s*/)[0];
+  var tail = raw.match(/\s*$/)[0];
+  var core = raw.trim();
+  if (!core) return raw;
+  var out;
+  if (Object.prototype.hasOwnProperty.call(EN, core)) out = EN[core];
+  else {
+    out = core;
+    for (var i=0;i<ENR.length;i++) out = out.replace(ENR[i][0], ENR[i][1]);
+    for (var j=0;j<EN_KEYS.length;j++){
+      var k = EN_KEYS[j];
+      if (k.length > 1 && out.indexOf(k) >= 0) out = out.split(k).join(EN[k]);
+    }
+  }
+  return lead + out + tail;
+}
+var EN_KEYS = Object.keys(EN).sort(function(a,b){ return b.length - a.length; });
+
+/* 渲染后把整棵树的文本节点过一遍 */
+function applyLang(root){
+  if (LANG !== 'en' || !root) return;
+  var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
+  var list = [], n;
+  while ((n = walker.nextNode())) list.push(n);
+  for (var i=0;i<list.length;i++){
+    var v = list[i].nodeValue;
+    if (v && /[\u4e00-\u9fa5]/.test(v)) list[i].nodeValue = tr(v);
+  }
+  var ph = root.querySelectorAll('[placeholder]');
+  for (var j=0;j<ph.length;j++) ph[j].setAttribute('placeholder', tr(ph[j].getAttribute('placeholder')));
+  /* 文本框里的默认中文（预设名、外置停点）也一并转，否则英文界面里会冒出中文 */
+  var ti = root.querySelectorAll('input[type="text"]');
+  for (var k2=0;k2<ti.length;k2++){
+    if (ti[k2].value) ti[k2].value = tr(ti[k2].value);
+  }
+}
 
 /* ================= 工具 ================= */
 var pad = function(n){ return String(n).padStart(2,'0'); };
@@ -335,6 +648,11 @@ function addDays(k, n){ var d = parseDate(k); d.setDate(d.getDate()+n); return f
 function hhmm(ts){ var d = new Date(ts); return pad(d.getHours()) + ':' + pad(d.getMinutes()); }
 function fmtMin(m){
   m = Math.max(0, Math.round(m));
+  if (LANG === 'en'){
+    if (m < 60) return m + ' min';
+    var h2 = Math.floor(m/60), r2 = m % 60;
+    return r2 ? (h2 + 'h ' + r2 + 'm') : (h2 + 'h');
+  }
   if (m < 60) return m + ' 分';
   var h = Math.floor(m/60), r = m % 60;
   return r ? (h + ' 小时 ' + r + ' 分') : (h + ' 小时');
@@ -356,10 +674,26 @@ function todayKey(){ return dayKeyOf(Date.now()); }
 function dayLabel(k){
   var d = parseDate(k);
   var t = todayKey();
-  var head = (d.getMonth()+1) + '月' + d.getDate() + '日 ' + WEEK[d.getDay()];
+  if (LANG === 'en'){
+    var head2 = MON_EN[d.getMonth()] + ' ' + d.getDate() + ' ' + WEEK_EN[d.getDay()];
+    if (k === t) return head2 + ' · today';
+    if (k === addDays(t,-1)) return head2 + ' · yesterday';
+    return head2;
+  }
+  var head = (d.getMonth()+1) + '月' + d.getDate() + '日 ' + WEEK_ZH[d.getDay()];
   if (k === t) return head + ' · 今天';
   if (k === addDays(t,-1)) return head + ' · 昨天';
   return head;
+}
+function colLabel(c){ return LANG === 'en' ? COL_EN[c] : COL_ZH[c]; }
+function coefLine(p){
+  return LANG === 'en'
+    ? ('E ' + fmtPts(p.energy) + ' · A ' + fmtPts(p.attention))
+    : ('精 ' + fmtPts(p.energy) + ' · 注 ' + fmtPts(p.attention));
+}
+function headerDate(d){
+  if (LANG === 'en') return MON_EN[d.getMonth()] + ' ' + d.getDate() + ' ' + WEEK_EN[d.getDay()];
+  return (d.getMonth()+1) + '月' + d.getDate() + '日 ' + WEEK_ZH[d.getDay()];
 }
 
 /* ================= 状态 ================= */
@@ -373,13 +707,17 @@ function seedState(){
     createdAt: Date.now(),
     config: {
       set: false,
+      lang: null,
       limitMin: null,
       energyThr: 200,        /* 用户自己定的默认刻度 */
       attentionThr: 200,
       nextWindow: {date:'', start:'', end:''},
       noshowPolicy: 'postpone'
     },
-    presets: PRESET_SEED.map(function(p){ return Object.assign({}, p); }),
+    presets: PRESET_SEED.map(function(p){
+      return {id:p.id, name:p.name, column:p.column,
+              energy:p.energy, attention:p.attention, naturalEnd:p.naturalEnd};
+    }),
     entries: [],
     blocks: [],
     days: {}
@@ -675,7 +1013,7 @@ function viewHome(){
   var s = statusOf(st);
   var nb = nextBlock();
   var d = new Date();
-  var head = (d.getMonth()+1) + '月' + d.getDate() + '日 ' + WEEK[d.getDay()];
+  var head = headerDate(d);
 
   var main, sub;
   if (s.code === 'open'){
@@ -726,6 +1064,25 @@ function viewHome(){
   '<div class="foot"><button data-act="go-review">回顾</button><button data-act="go-settings">设置</button></div>';
 }
 
+/* ================= 视图：选择语言 ================= */
+function viewLang(){
+  return '' +
+  '<div class="hd"><span>刻度 · Scale</span><span class="r">v' + APP_VERSION + '</span></div>' +
+  '<div class="status" data-code="open">' +
+    '<div class="big">选择语言 · Choose language</div>' +
+    '<div class="sub">之后可以在设置里改 · You can change it later in Settings</div>' +
+  '</div>' +
+  '<button class="primary" data-act="lang" data-v="zh" style="margin-top:20px">中文</button>' +
+  '<button class="ghost" data-act="lang" data-v="en">English</button>';
+}
+function setLanguage(l){
+  LANG = (l === 'en') ? 'en' : 'zh';
+  S.config.lang = LANG;
+  save();
+  if (ui.view === 'lang') ui.view = S.config.set ? 'home' : 'setup';
+  render();
+}
+
 /* ================= 视图：首次刻度设定 ================= */
 function viewSetup(){
   var c = S.config;
@@ -766,12 +1123,14 @@ function reviewDaily(){
     var st = dayStats(k);
     var s = statusOf(st);
     var cx = crossings(k);
-    var flags = [];
-    if (s.tv) flags.push('时间用尽');
-    if (s.ev) flags.push('精力触线');
-    if (s.av) flags.push('注意力触线');
     var open = ui.openDay === k;
     var isFuture = k > todayKey();
+    var flags = [];
+    if (!isFuture){
+      if (s.tv) flags.push('时间用尽');
+      if (s.ev) flags.push('精力触线');
+      if (s.av) flags.push('注意力触线');
+    }
     var tail = flags.length ? (' · ' + flags.join(' · '))
              : (isFuture ? ' · 未到' : ' · 未触线');
     if (st.rTime > 0) tail += ' · 预留 ' + st.rTime + ' 分';
@@ -794,7 +1153,7 @@ function reviewDaily(){
         '<td class="num">' + e.minutes + '</td>' +
         '<td class="num">' + (e.column === 'white' ? '—' : fmtPts(e.energyCoef)) + '</td>' +
         '<td class="num">' + (e.column === 'white' ? '—' : fmtPts(e.attentionCoef)) + '</td>' +
-        '<td>' + COL_LABEL[e.column] + '</td>' +
+        '<td>' + colLabel(e.column) + '</td>' +
       '</tr>';
     }).join('');
 
@@ -865,12 +1224,20 @@ function reviewOverview(){
     return b.status === 'reserved' && b.reserveDate > t;
   }).length;
 
-  var sumHTML =
-    '<div class="summary">' +
+  var sumHTML;
+  if (LANG === 'en'){
+    sumHTML = '<div class="summary">' +
+      (range === 0 ? 'All time' : ('Last ' + range + ' days')) + ' · <b>' + keys.length + '</b> days with entries<br>' +
+      'Frozen blocks <b>' + nBlock + '</b> · no-show <b>' + nNoshow + '</b> (postponed <b>' + nPost + '</b> · voided <b>' + nZero + '</b>)' +
+      (nPending ? '<br>Reserved, not yet due <b>' + nPending + '</b>' : '') +
+    '</div>';
+  } else {
+    sumHTML = '<div class="summary">' +
       '近' + (range === 0 ? '全部' : range + ' 天') + ' 有登记 <b>' + keys.length + '</b> 天<br>' +
       '冻结块 <b>' + nBlock + '</b> 次 · 爽约 <b>' + nNoshow + '</b> 次（顺延 <b>' + nPost + '</b> · 归零 <b>' + nZero + '</b>）' +
       (nPending ? '<br>在约未到 <b>' + nPending + '</b> 次' : '') +
     '</div>';
+  }
 
   var rows = keys.map(function(k){
     var st = dayStats(k);
@@ -921,7 +1288,7 @@ function viewSettings(){
         '<input class="pname" type="text" value="' + esc(p.name) + '" data-pid="' + p.id + '" data-pfield="name">' +
         '<select data-pid="' + p.id + '" data-pfield="column">' +
           ['high','low','white'].map(function(v){
-            return '<option value="' + v + '"' + (p.column===v?' selected':'') + '>' + COL_LABEL[v] + '</option>';
+            return '<option value="' + v + '"' + (p.column===v?' selected':'') + '>' + colLabel(v) + '</option>';
           }).join('') +
         '</select>' +
       '</div>' +
@@ -977,6 +1344,20 @@ function viewSettings(){
       : '<button class="ghost danger" data-act="clear-arm">一键清空历史</button>') +
   '</div>' +
 
+  '<div class="sec">' +
+    '<div class="sec-hd">通用</div>' +
+    '<div class="field"><label>语言</label>' +
+      '<span class="seg">' +
+        '<button class="' + (LANG === 'zh' ? 'on' : '') + '" data-act="lang" data-v="zh">中文</button>' +
+        '<button class="' + (LANG === 'en' ? 'on' : '') + '" data-act="lang" data-v="en">EN</button>' +
+      '</span>' +
+    '</div>' +
+    '<div class="field"><label>版本<span class="hint">v' + APP_VERSION + ' · ' + REPO + '</span></label>' +
+      '<button class="mini-btn" data-act="check-update">检查更新</button>' +
+    '</div>' +
+    '<div class="note">检查更新只在点这一下时联网；平时完全不发请求。</div>' +
+  '</div>' +
+
   '<div class="foot"><button data-act="home">回到首页</button></div>';
 }
 function clampNum(v, lo, hi, dflt){
@@ -1015,7 +1396,7 @@ function sheetRegister(){
         return '<button class="chip' + (d.presetId === p.id ? ' on' : '') + '"' + (dis ? ' disabled' : '') +
           ' data-act="pick-preset" data-id="' + p.id + '">' +
           '<span>' + esc(p.name) + '</span>' +
-          '<em>' + (p.column === 'white' ? '不计入' : ('精 ' + fmtPts(p.energy) + ' · 注 ' + fmtPts(p.attention))) + '</em>' +
+          '<em>' + (p.column === 'white' ? '不计入' : coefLine(p)) + '</em>' +
         '</button>';
       }).join('') + '</div></div>';
   }
@@ -1027,13 +1408,13 @@ function sheetRegister(){
     if (col === 'white') tag = '<span class="tag" style="color:var(--ink3)">不计入任何额度</span>';
     else if (st.timeLeft <= 0) tag = '<span class="tag">时间用尽</span>';
     else if (col === 'high' && (s.ev || s.av)) tag = '<span class="tag">已触线 · 不可开</span>';
-    html += '<div class="grp"><div class="grp-hd">' + COL_LABEL[col] + tag + '</div><div class="chips">';
+    html += '<div class="grp"><div class="grp-hd">' + colLabel(col) + tag + '</div><div class="chips">';
     ps.forEach(function(p){
       var dis = !canStart(p, st, s);
       html += '<button class="chip' + (d.presetId === p.id ? ' on' : '') + '"' + (dis ? ' disabled' : '') +
         ' data-act="pick-preset" data-id="' + p.id + '">' +
         '<span>' + esc(p.name) + '</span>' +
-        '<em>' + (col === 'white' ? '—' : ('精 ' + fmtPts(p.energy) + ' · 注 ' + fmtPts(p.attention))) + (p.naturalEnd ? '' : ' · 无终点') + '</em>' +
+        '<em>' + (col === 'white' ? '—' : coefLine(p)) + (p.naturalEnd ? '' : ' · 无终点') + '</em>' +
       '</button>';
     });
     html += '</div></div>';
@@ -1140,7 +1521,7 @@ function sheetEntry(){
   if (!has) opts += '<option value="' + e.presetId + '" selected>' + esc(e.name) + '（已从预设表移除）</option>';
   opts += S.presets.map(function(p){
     return '<option value="' + p.id + '"' + (p.id === e.presetId ? ' selected' : '') + '>' +
-      esc(p.name) + '　·　' + COL_LABEL[p.column] + '</option>';
+      esc(p.name) + '　·　' + colLabel(p.column) + '</option>';
   }).join('');
 
   var t = new Date(e.ts);
@@ -1296,7 +1677,7 @@ function sheetCalc(){
 
   var rows = S.presets.filter(function(p){ return p.column !== 'white'; }).map(function(p){
     return '<div class="calc-row">' +
-      '<div class="calc-name">' + esc(p.name) + '<span>' + COL_LABEL[p.column] + '</span></div>' +
+      '<div class="calc-name">' + esc(p.name) + '<span>' + colLabel(p.column) + '</span></div>' +
       line(p, 'e', '精力', eT, p.energy) +
       line(p, 'a', '注意力', aT, p.attention) +
     '</div>';
@@ -1403,10 +1784,12 @@ function render(){
   var root = document.getElementById('root');
   if (!S.config.set && ui.view === 'home') ui.view = 'setup';
   if (todayKey() !== ui.waterDay){ ui.waterDay = todayKey(); ui.waterPct = {}; }
-  if (ui.view === 'setup') root.innerHTML = viewSetup();
+  if (ui.view === 'lang') root.innerHTML = viewLang();
+  else if (ui.view === 'setup') root.innerHTML = viewSetup();
   else if (ui.view === 'review') root.innerHTML = viewReview();
   else if (ui.view === 'settings') root.innerHTML = viewSettings();
   else root.innerHTML = viewHome();
+  applyLang(root);
   if (ui.view === 'home') requestAnimationFrame(paintWater);
   syncSheet();
 }
@@ -1419,13 +1802,15 @@ function syncSheet(){
   else if (ui.sheet.type === 'reserve') body = sheetReserve();
   else if (ui.sheet.type === 'calc') body = sheetCalc();
   else if (ui.sheet.type === 'entry') body = sheetEntry();
+  else if (ui.sheet.type === 'update') body = sheetUpdate();
   l.innerHTML = '<div class="scrim" data-act="close-sheet"></div>' +
                 '<div class="sheet-wrap"><div class="sheet">' + body + '</div></div>';
+  applyLang(l);
   if (ui.sheet && ui.sheet.type === 'entry') refreshEditPreview();
 }
 function toast(msg){
   var t = document.getElementById('toast');
-  t.textContent = msg;
+  t.textContent = tr(msg);
   t.hidden = false;
   clearTimeout(toast._tm);
   toast._tm = setTimeout(function(){ t.hidden = true; }, 2300);
@@ -1547,6 +1932,45 @@ function exportJSON(){
   setTimeout(function(){ URL.revokeObjectURL(url); }, 5000);
   toast('已导出');
 }
+/* ---- 检查更新 ---- */
+function cmpVer(a, b){
+  var x = String(a).split('.'), y = String(b).split('.');
+  for (var i=0;i<3;i++){
+    var p = Number(x[i] || 0), q = Number(y[i] || 0);
+    if (p > q) return 1;
+    if (p < q) return -1;
+  }
+  return 0;
+}
+function checkUpdate(){
+  /* APK 没有联网权限（故意的），交给浏览器打开发布页，用眼睛比版本号 */
+  if (window.AndroidApp && window.AndroidApp.openUrl){
+    try { window.AndroidApp.openUrl('https://github.com/' + REPO + '/releases/latest'); } catch (e) {}
+    toast('已打开 Releases 页面，看最新版本号');
+    return;
+  }
+  toast('正在检查…');
+  fetch('https://api.github.com/repos/' + REPO + '/releases/latest', {cache:'no-store'})
+    .then(function(r){ return r.json(); })
+    .then(function(j){
+      var tag = String((j && j.tag_name) || '').replace(/^v/i, '');
+      if (!tag){ toast('没有找到发布版本'); return; }
+      if (cmpVer(tag, APP_VERSION) > 0){
+        ui.sheet = {type:'update', ctx:{tag:tag, url:j.html_url || ('https://github.com/' + REPO + '/releases')}};
+        syncSheet();
+      } else {
+        toast('已是最新版本 v' + APP_VERSION);
+      }
+    })
+    .catch(function(){ toast('检查失败：可能没有联网'); });
+}
+function sheetUpdate(){
+  var c = ui.sheet.ctx;
+  return sheetWrap('发现新版本 v' + c.tag,
+    '<div class="pre">当前版本 <b>v' + APP_VERSION + '</b><br>最新版本 <b>v' + c.tag + '</b></div>' +
+    '<button class="primary" data-act="open-release">打开发布页</button>' +
+    '<div class="note">网页版可以直接刷新；APK 需要下载新的安装包覆盖安装，数据会保留。</div>');
+}
 function undoLast(){
   if (!S.entries.length){ toast('没有可撤销的登记'); return; }
   var e = S.entries[S.entries.length-1];
@@ -1649,6 +2073,17 @@ document.addEventListener('click', function(ev){
   if (act === 'open-blocks'){ ui.sheet = {type:'blocks', ctx:{}}; syncSheet(); return; }
   if (act === 'open-reserve'){ ui.sheet = {type:'reserve', ctx:{}}; syncSheet(); return; }
   if (act === 'open-calc'){ ui.sheet = {type:'calc', ctx:{}}; syncSheet(); return; }
+  if (act === 'lang'){ setLanguage(el.getAttribute('data-v')); return; }
+  if (act === 'check-update'){ checkUpdate(); return; }
+  if (act === 'open-release'){
+    var uu = ui.sheet && ui.sheet.ctx && ui.sheet.ctx.url;
+    ui.sheet = null; syncSheet();
+    if (uu){
+      if (window.AndroidApp && window.AndroidApp.openUrl){ try { window.AndroidApp.openUrl(uu); } catch(e){} }
+      else window.open(uu, '_blank');
+    }
+    return;
+  }
   if (act === 'calc-apply'){ applyCalc(); return; }
   if (act === 'edit-entry'){ ui.sheet = {type:'entry', ctx:{id: el.getAttribute('data-id')}}; syncSheet(); return; }
   if (act === 'entry-save'){ saveEntryEdit(); return; }
@@ -1835,7 +2270,12 @@ if (!storageOK){
 }
 
 load();
-if (!S.config.set) ui.view = 'setup';
+LANG = (S.config.lang === 'en') ? 'en' : 'zh';
+if (!S.config.lang){
+  if (S.config.set){ S.config.lang = 'zh'; save(); }   /* 老用户默认中文，不打断 */
+  else ui.view = 'lang';
+}
+if (!S.config.set && ui.view !== 'lang') ui.view = 'setup';
 render();
 
 /* 打开时若已跨过 04:00，仅重绘（不做任何结算动作，避免“打卡”感） */
