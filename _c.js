@@ -1,0 +1,2308 @@
+
+(function(){
+'use strict';
+
+/* ================= 常量 ================= */
+var RESET_HOUR = 4;                 /* 每日 04:00 本地时区结算 */
+var KEY = 'scale.ledger.v1';
+var APP_VERSION = '1.2.0';
+var REPO = 'twilightsunmoon-web/scale';
+var WEEK_ZH = ['周日','周一','周二','周三','周四','周五','周六'];
+var WEEK_EN = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+var MON_EN = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+var COL_ZH = {high:'高消耗', low:'低消耗', white:'白名单'};
+var COL_EN = {high:'High', low:'Low', white:'White-list'};
+var COL_DESC  = {high:'到线即不可再开', low:'到线后仍可开', white:'带物理终点，不计入'};
+
+/* 语言：'zh' | 'en'。中文文案写在源码里，英文靠字典在渲染后替换 */
+var LANG = 'zh';
+
+var PRESET_SEED = [
+  {id:'p_phone', name:'玩手机',                 column:'high',  energy:2, attention:3, naturalEnd:false},
+  {id:'p_game',  name:'打游戏（含和朋友联机）', column:'high',  energy:3, attention:2, naturalEnd:true},
+  {id:'p_music', name:'听音乐',                 column:'low',   energy:1, attention:1, naturalEnd:true},
+  {id:'p_book',  name:'看书',                   column:'low',   energy:1, attention:2, naturalEnd:true},
+  {id:'p_dig',   name:'钻研冷门领域',           column:'low',   energy:2, attention:2, naturalEnd:false},
+  {id:'p_sleep', name:'睡眠',                   column:'white', energy:1, attention:1, naturalEnd:true},
+  {id:'p_eyes',  name:'闭眼',                   column:'white', energy:1, attention:1, naturalEnd:true},
+  {id:'p_walk',  name:'散步',                   column:'white', energy:1, attention:1, naturalEnd:true},
+  {id:'p_bath',  name:'洗澡',                   column:'white', energy:1, attention:1, naturalEnd:true}
+];
+
+/* ---------- 英文词典（按整串或短语替换；长的优先） ---------- */
+var EN = {
+  /* 活动名 */
+  '玩手机':'Phone / feed',
+  '打游戏（含和朋友联机）':'Gaming (incl. online)',
+  '听音乐':'Music',
+  '看书':'Reading',
+  '钻研冷门领域':'Rabbit holes',
+  '睡眠':'Sleep',
+  '闭眼':'Eyes closed',
+  '散步':'Walk',
+  '洗澡':'Shower',
+
+  /* 列 */
+  '高消耗':'High cost',
+  '低消耗':'Low cost',
+  '白名单':'White-list',
+  '到线后仍可开':'still open after the line',
+  '到线即不可再开':'locked after the line',
+  '带物理终点，不计入':'physical end point, not counted',
+
+  /* 首页 */
+  '可以开下一场':'You can start another round',
+  '高消耗 / 低消耗 都可登记':'High and low cost are both open',
+  '当日已触线 · 仅低消耗':'Line reached · low cost only',
+  '当日已触线 · 时间用尽':'Line reached · time used up',
+  '精力与注意力都到阈值':'energy and attention are both at the line',
+  '精力到阈值':'energy is at the line',
+  '注意力到阈值':'attention is at the line',
+  '，剩余时间只流向低消耗':', the rest of today goes to low cost only',
+  '，且时间已用尽':', and the time cap is used up',
+  '今天的额度到这里':'the quota ends here for today',
+  '起身倒水':'Stand up, pour water',
+  '正事只做开头 2 分钟':'then do just the first 2 minutes of the real thing',
+  '今天登记过信息流类（无自然终点）：到线即锁屏':'You logged a feed-type activity today (no natural end): lock the screen at the line',
+  '下一冻结块':'Next frozen block',
+  '登记一场':'Log a session',
+  '预约联机（冻结块）':'Reserve online play (frozen block)',
+  '回顾':'Review',
+  '设置':'Settings',
+  '拖动柱子顶端 = 直接改这一项的阈值':'Drag the top of a column to change its threshold',
+  '剩 ':'left ',
+  '时间':'Time',
+  '精力':'Energy',
+  '注意力':'Attention',
+  '无':'none',
+  '本机存储':'on this device',
+
+  '刻度':'Scale',
+  '本机存储':'on this device',
+
+  /* 首次设定 */
+  '先把刻度定下来':'Set your scale first',
+  '精力与注意力已按你定的 200 预填，随时可改；每日上限由你填。':'Energy and attention are prefilled with your 200; the daily time cap is yours to fill.',
+  '每日上限':'Daily cap',
+  '分钟，唯一的硬时间闸门':'minutes — the only hard gate',
+  '精力阈值':'Energy threshold',
+  '点 = 分钟 × 精力系数':'points = minutes × energy coefficient',
+  '注意力阈值':'Attention threshold',
+  '点 = 分钟 × 注意力系数':'points = minutes × attention coefficient',
+  '阈值定下来之后，每个活动的系数可以在设置里用「按等效分钟算系数」反推：系数 = 阈值 ÷ 整日等效分钟。':'Once the thresholds are set, derive each activity coefficient in Settings → "Coefficients from minutes": coefficient = threshold ÷ minutes-to-exhaustion.',
+  '用这套刻度开始':'Start with this scale',
+
+  /* 回顾 */
+  '点行可修正':'tap a row to edit',
+  '每日':'Daily',
+  '总览':'Overview',
+  '未触线':'under the line',
+  '未到':'not yet',
+  '时间用尽':'time used up',
+  '精力触线':'energy line',
+  '注意力触线':'attention line',
+  '时刻':'Time',
+  '活动':'Activity',
+  '分':'min',
+  '点 · 注意力':'pts · attention',
+  '剩':'left',
+  '当前阈值':'Current thresholds —',
+  '精':'E',
+  '注':'A',
+  '列':'Col',
+  '冻结块':'Frozen',
+  '绑锁屏':'locks screen',
+  '停点':'stop point',
+  '不计入':'not counted',
+  '改过':'edited',
+  '已删':'deleted',
+  '恢复':'Restore',
+  '当天只有冻结块，没有登记。':'Only a frozen block that day, no sessions logged.',
+  '收起已删除':'hide deleted',
+  '还没任何登记。':'No entries yet.',
+  '还没有任何登记。':'No entries yet.',
+  '触线：':'Line: ',
+  '时间到上限':'time cap at ',
+  '当日未触线':'no line reached',
+  '外置停点：':'Stop point: ',
+  '冻结块：':'Frozen blocks: ',
+  '点某一行可以修正它（活动 / 时长 / 开始时间）或删掉；改动会留原始值，不静默覆盖。':'Tap a row to correct it (activity / duration / start time) or delete it. Edits keep the original value.',
+  '近 7 天':'7 days',
+  '近 30 天':'30 days',
+  '全部':'All',
+  '这个范围内没有登记。':'No entries in this range.',
+  '浅色底 = 当日上限':'light track = daily cap',
+
+  /* 设置 */
+  '刻度（也能在首页直接拖柱子改）':'Scale (also draggable on the home screen)',
+  '点 = 分钟 × 系数。改后今天即生效；已过去的日子保留当时的刻度。':'points = minutes × coefficient. Changes apply today; past days keep their own scale.',
+  '这里的「时间」只算工作与睡觉之外的闲置时间（娱乐时间），不是一整天。':'The "time" here is idle time outside work and sleep — leisure time, not the whole day.',
+  '下次联机窗口（爽约“顺延”落在这里）':'Next online window (a "postponed" no-show lands here)',
+  '日期':'Date',
+  '开始':'Start',
+  '结束':'End',
+  '新建预约时默认兜底':'No-show fallback',
+  '写死在每一条预约里，爽约时不再问':'fixed per reservation, never asked again',
+  '顺延到下次窗口':'postpone',
+  '直接归零':'void it',
+  '活动预设表（系数自己填，0–9，可带小数）':'Activity presets (free coefficients, 0–9, decimals fine)',
+  '按等效分钟算系数':'Coefficients from minutes',
+  '＋ 新增自定义事件':'＋ Add custom activity',
+  '数据':'Data',
+  '导出 JSON（含全部历史）':'Export JSON (all history)',
+  '撤销上一次登记（无记录）':'Undo last entry (none)',
+  '一键清空历史':'Clear all history',
+  '确认清空':'Clear it',
+  '取消':'Cancel',
+  '回到首页':'Back to home',
+  '语言':'Language',
+  '检查更新':'Check for updates',
+  '版本':'Version',
+  '删除':'Delete',
+  '有终点':'has end',
+  '无终点':'no end',
+  '白名单：不计入任何额度':'White-list: counts toward nothing',
+  '精力系数':'energy',
+  '注意力系数':'attention',
+
+  /* 弹层：登记 */
+  '关闭':'Close',
+  '最近':'Recent',
+  '不计入任何额度':'counts toward nothing',
+  '已触线 · 不可开':'line reached · locked',
+  '先选一项。':'Pick one first.',
+  '选完只确认一次，玩中不用再回来。':'Confirm once; you will not come back mid-session.',
+  '时长':'Duration',
+  '外置停点（开局前写下，登记后不再改）':'Stop point (write it before you start; not editable later)',
+  '停在你自己写的这句话上，不靠当场判断。':'Stop on the sentence you wrote, not on an in-the-moment judgement.',
+  '无自然终点（信息流类）：到线即绑锁屏。':'No natural end (feed type): lock the screen at the line.',
+  '登记':'Log it',
+  '登记完就关掉。玩中不回看、玩完不补记。':'Close it after logging. No glancing mid-session, no backfilling.',
+  '登记后即触线':'This crosses the line as soon as it is logged',
+  '这一项没有自然终点：到线即锁屏':'This one has no natural end: lock the screen at the line',
+  '白名单：':'White-list: ',
+  ' 记入当天归档，':' logged to the archive, ',
+  '不扣':'deducting nothing from ',
+  '时间 / 精力 / 注意力。':'time / energy / attention.',
+
+  /* 弹层：冻结块 */
+  '还没有冻结块。':'No frozen blocks yet.',
+  '新建预约':'New reservation',
+  '已预留':'reserved',
+  '已发生':'taken place',
+  '爽约 · 顺延':'no-show · postponed',
+  '爽约 · 归零':'no-show · voided',
+  '已取消':'cancelled',
+  '待排窗口':'awaiting a window',
+  '开始这一场':'Start this session',
+  '爽约':'No-show',
+  '取消预约':'Cancel reservation',
+  '兜底：':'fallback: ',
+  '顺延':'postpone',
+  '归零':'void',
+  '绑 ':'on ',
+
+  /* 弹层：预约 */
+  '预约联机':'Reserve online play',
+  '预约日期':'Date',
+  '时段':'Window',
+  '时长（分钟）':'Duration (minutes)',
+  '爽约兜底（写死在这一次预约里，之后不再选）':'No-show fallback (fixed in this reservation, never chosen again)',
+  '两种都不会解冻回自由池。默认取设置里的默认值，可在这里改一次。':'Neither returns the quota to the free pool. Defaults come from Settings; you can change it once here.',
+  '该日已登记':'That day has',
+  '加上这一场':'with this session',
+  '会撞破：':'Would break: ',
+  '不吃紧':'comfortable',
+  '这一场只划入 ':'This session is earmarked for ',
+  ' 的额度，不占其他日期，也不要求今天先省着花。':' only. It takes nothing from other days, and you do not have to save up today.',
+  '锁进日历':'Lock it into the calendar',
+  '预留时已经预判过是否撞破当日双阈值；此后不每天重判。':'The double threshold was checked when you reserved. It is not re-judged daily.',
+
+  /* 弹层：修正 */
+  '修正这一条':'Correct this entry',
+  '这条已经被删除了。':'This entry has been deleted.',
+  '这条已不存在。':'This entry no longer exists.',
+  '开始时刻':'Start time',
+  '外置停点':'Stop point',
+  '会变成：':'Becomes: ',
+  '填一个大于 0 的分钟数。':'Enter a duration above 0.',
+  '这一项已从预设表移除，只能改时长或删除。':'This activity was removed from presets; you can only change the duration or delete it.',
+  '原始值':'Original',
+  '改过 ':'edited ',
+  ' 次':' times',
+  '保存修改':'Save',
+  '删除这一条':'Delete this entry',
+  '改完只动这一条，不动阈值和其他记录。删除后可以在当天的「已删除」里恢复。':'Only this entry changes. Deleted entries can be restored from that day.',
+
+  /* 弹层：计算器 */
+  '规则：':'Rule: ',
+  '系数 = 阈值 ÷ 等效分钟':'coefficient = threshold ÷ minutes-to-exhaustion',
+  '当前阈值 精力 ':'Current thresholds — energy ',
+  '（在设置里改，这里跟着变）':'(change them in Settings; this follows)',
+  '「等效分钟」= 假定整天只做这一项，多少分钟后这条线见底。留空 = 这一项不改。':'"Minutes" = if today were only this activity, how long before the line is hit. Leave blank to keep the current value.',
+  '（上限截断）':'(capped at 9)',
+  '不改':'unchanged',
+  '白名单不计入任何额度，已跳过。系数上限 9。':'White-list activities count toward nothing and are skipped. Coefficients cap at 9.',
+  '写入这些系数':'Write these coefficients',
+  '只改系数，不动阈值，也不动已经登记过的历史。':'Only coefficients change — not thresholds, not logged history.',
+
+  '分':'min',
+  '点 · 注意力':'pts · attention',
+  '剩':'left',
+  '当前阈值':'Current thresholds —',
+  '点':'pts',
+  '分钟':'minutes',
+  '天':'days',
+  '通用':'General',
+  '新增后立刻出现在首页「登记一场」里，常用项会排在最上面。系数只在这里手改，程序不会自动调。“无终点”= 没有自然结束点：高消耗列的无终点活动到线即绑锁屏；低消耗列的无终点活动，开局前必须先写下外置停点。':'New activities show up in "Log a session" right away, most-used on top. Coefficients are edited here only — nothing is auto-tuned. "No end" means no natural stopping point: in the High-cost column it locks the screen at the line; in the Low-cost column you must write a stop point before starting.',
+  '只有点这一下（含下载更新）才联网；平时完全不发请求。':'This button (and the download it starts) is the only time it goes online; otherwise it sends no requests at all.',
+
+  '导入 JSON（迁移或恢复）':'Import JSON (migrate or restore)',
+  '导入 JSON':'Import JSON',
+  '选一份之前「导出 JSON」存下的文件。导入前会先列清单，你确认了才写进去。':'Pick a file you exported earlier. You will see a summary first — nothing is written until you confirm.',
+  '数据只在这台设备上处理，不会上传。':'The file is processed on this device only. Nothing is uploaded.',
+  '文件':'File',
+  '导出时间':'Exported',
+  '记录范围':'Range',
+  '合并':'Merge',
+  '覆盖':'Replace',
+  '为：只补本机没有的记录（按 id 判重），当前刻度和预设不动。':'only adds entries this device does not have (by id); thresholds and presets stay as they are.',
+  '用文件里的刻度、预设、全部历史替换本机数据（界面语言保持不变）。':'replaces thresholds, presets and all history with the file’s; your UI language stays.',
+  '合并导入':'Merge in',
+  '覆盖导入':'Replace all',
+  '不是有效的 JSON':'That file is not valid JSON',
+  '文件里没有可用的记录':'No usable records in that file',
+  '改成':'to',
+
+  '新增事件':'Add activity',
+  '名称':'Name',
+  '所属列':'Column',
+  '这一项多少分钟见底':'How long until it bottoms out',
+  '白名单不计入任何额度，不用填系数（睡眠、散步这类）。':'White-list activities count toward nothing — no coefficients needed (sleep, walk and the like).',
+  '结束方式':'How it ends',
+  '保存这个事件':'Save this activity',
+  '存好之后会出现在「登记一场」里，也可以再去预设表里改。':'It will show up in “Log a session”, and you can still edit it in the preset table.',
+  '先给这个事件起个名字':'Give this activity a name first',
+  '已新增：':'Added: ',
+
+  '下载并安装':'Download and install',
+  '直接下载最新版':'Download the latest build',
+  '去 Release 页面':'Open the release page',
+  '可能是新版本':'Maybe there is a newer build',
+  '检查更新':'Check for updates',
+  '没查到版本号，可能没联网。':'Could not read the version — maybe offline.',
+  '可以直接下载最新安装包试试，覆盖安装不会丢数据。':'You can still grab the latest APK directly; installing over keeps your data.',
+  '下载在后台进行，完成后系统会弹出安装器。覆盖安装，数据不会丢。':'It downloads in the background, then the system installer opens. Installing over keeps your data.',
+  '第一次可能要求你允许「刻度」安装未知应用。':'The first time, Android may ask you to allow 「刻度」 to install apps.',
+  '网页版刷新即可拿到新版；APK 去 Release 下载覆盖安装，数据会保留。':'On the web just reload; for the APK download from Releases and install over it — your data stays.',
+  '下载失败：':'Download failed: ',
+
+  '系数是什么意思？':'What does the coefficient mean?',
+  '收起说明':'Hide',
+  '把「系数」当成一个倍率，不是分数，也不是评价。':'Treat the coefficient as a multiplier — not a score, not a judgement.',
+  '系数 2':'A coefficient of 2',
+  ' 的意思是：这一项每过 1 分钟，扣 2 点。登记 60 分钟就是 120 点。':' means: 2 points are deducted per minute. Logging 60 minutes costs 120 points.',
+  '不同的事每分钟扣得不一样：刷手机 30 分钟和散步 30 分钟，占的不是同一份额度，所以给不同的倍率。':'Different things drain at different rates: 30 minutes of scrolling and 30 minutes of walking do not take the same thing out of you, so they get different multipliers.',
+  '系数是反推出来的：':'The coefficient is derived backwards:',
+  '系数 = 阈值 ÷ 整天只做这一项的分钟数':'coefficient = threshold ÷ minutes until you would be done if today were only this',
+  '。阈值 200、你填 100 分钟 → 系数 2；填 400 分钟 → 系数 0.5。':'. Threshold 200, you enter 100 minutes → coefficient 2; enter 400 minutes → 0.5.',
+  '它回答的是「同样一小时，这件事到底有多耗」。所以别人的系数对你没意义——它取决于你自己的阈值。':'It answers “for the same hour, how much does this really cost me”. Someone else’s coefficients are meaningless to you — they depend on your own thresholds.',
+  '白名单（睡眠、散步这类）不参与计算，系数填什么都无所谓。':'White-list items (sleep, walking) are not counted at all — whatever you put as their coefficient does not matter.',
+
+  /* 提示语 */
+  '本地存储写入失败':'Could not write local storage',
+  '这一项现在不可开':'That one is closed right now',
+  '先写下外置停点':'Write the stop point first',
+  '没有可撤销的登记':'Nothing to undo',
+  '历史已清空':'History cleared',
+  '预设已删除（历史记录不受影响）':'Preset deleted (history untouched)',
+  '已恢复':'Restored',
+  '没有改动':'Nothing changed',
+  '已修改（原始值已保留）':'Saved (original kept)',
+  '已删除，可在当天的「已删除」里恢复':'Deleted — restorable from that day',
+  '已导出':'Exported',
+  '已取消预约':'Reservation cancelled',
+  '三个数都要填':'All three numbers are required',
+  '没有可写入的项':'Nothing to write',
+  '检查失败：可能没有联网':'Check failed — are you offline?',
+  '没有找到发布版本':'No release found',
+  '已是最新版本 ':'Up to date — ',
+  '正在检查…':'Checking…',
+  '已打开 Releases 页面，看最新版本号':'Opened the Releases page — compare the version there'
+};
+
+/* 动态串：先跑正则，再做短语替换 */
+var ENR = [
+  [/「整天只做这一项，多少分钟后这条线见底」——系数 = 阈值 ÷ 这个分钟数（当前精力 ([\d.]+) \/ 注意力 ([\d.]+)）。/g,
+    '“If today were only this activity, how long before the line is hit” — coefficient = threshold ÷ that many minutes (energy $1 / attention $2).'],
+  [/登记 (\d+) 分钟 ≈ 精力/g, '$1 min ≈ energy'],
+  [/登记 (\d+) 分钟 ≈ 精力 ([\d.]+) 点 · 注意力 ([\d.]+) 点/g,
+    '$1 min ≈ energy $2 pts · attention $3 pts'],
+  [/预留 (\d+) 分/g, 'reserved $1 min'],
+  [/预留 (\d+) min/g, 'reserved $1 min'],
+  [/每日 (\d{2}):00 结算/g, 'daily reset $1:00'],
+  [/(\d+) 小时 (\d+) 分/g, '$1h $2m'],
+  [/(\d+) 小时/g, '$1h'],
+  [/(\d+) 分(?!钟)/g, '$1 min'],
+  [/剩余 (\d+) 分钟/g, '$1 min left'],
+  [/已删除 (\d+) 条 · 显示/g, 'deleted $1 · show'],
+  [/ · 预留 (\d+) 分/g, ' · $1 min reserved'],
+  [/（含今日预留 (\d+) 分）/g, ' (incl. $1 min reserved today)'],
+  [/(\d+) 月 (\d+) 日/g, '$1/$2'],
+  [/今天 ([0-9]{2}:[0-9]{2})/g, 'today $1'],
+  [/明天 ([0-9]{2}:[0-9]{2})/g, 'tomorrow $1'],
+  [/(\d+) 条/g, '$1 entries'],
+  [/(\d+) 次/g, '$1'],
+  [/(\d+) 个系数/g, '$1 coefficients'],
+  [/(\d+) 天/g, '$1 days']
+];
+
+function tr(s){
+  if (LANG !== 'en' || !s) return s;
+  var raw = String(s);
+  var lead = raw.match(/^\s*/)[0];
+  var tail = raw.match(/\s*$/)[0];
+  var core = raw.trim();
+  if (!core) return raw;
+  var out;
+  if (Object.prototype.hasOwnProperty.call(EN, core)) out = EN[core];
+  else {
+    out = core;
+    for (var i=0;i<ENR.length;i++) out = out.replace(ENR[i][0], ENR[i][1]);
+    for (var j=0;j<EN_KEYS.length;j++){
+      var k = EN_KEYS[j];
+      if (k.length > 1 && out.indexOf(k) >= 0) out = out.split(k).join(EN[k]);
+    }
+  }
+  return lead + out + tail;
+}
+var EN_KEYS = Object.keys(EN).sort(function(a,b){ return b.length - a.length; });
+
+/* 渲染后把整棵树的文本节点过一遍 */
+function applyLang(root){
+  if (LANG !== 'en' || !root) return;
+  var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
+  var list = [], n;
+  while ((n = walker.nextNode())) list.push(n);
+  for (var i=0;i<list.length;i++){
+    var v = list[i].nodeValue;
+    if (v && /[\u4e00-\u9fa5]/.test(v)) list[i].nodeValue = tr(v);
+  }
+  var ph = root.querySelectorAll('[placeholder]');
+  for (var j=0;j<ph.length;j++) ph[j].setAttribute('placeholder', tr(ph[j].getAttribute('placeholder')));
+  /* 文本框里的默认中文（预设名、外置停点）也一并转，否则英文界面里会冒出中文 */
+  var ti = root.querySelectorAll('input[type="text"]');
+  for (var k2=0;k2<ti.length;k2++){
+    if (ti[k2].value) ti[k2].value = tr(ti[k2].value);
+  }
+}
+
+/* ================= 工具 ================= */
+var pad = function(n){ return String(n).padStart(2,'0'); };
+function esc(s){
+  return String(s==null?'':s).replace(/[&<>"']/g, function(c){
+    return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];
+  });
+}
+function uid(){ return Math.random().toString(36).slice(2,9) + Date.now().toString(36).slice(-4); }
+function fmtDate(d){ return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate()); }
+function parseDate(k){ var a = k.split('-').map(Number); return new Date(a[0], a[1]-1, a[2]); }
+function addDays(k, n){ var d = parseDate(k); d.setDate(d.getDate()+n); return fmtDate(d); }
+function hhmm(ts){ var d = new Date(ts); return pad(d.getHours()) + ':' + pad(d.getMinutes()); }
+function fmtMin(m){
+  m = Math.max(0, Math.round(m));
+  if (LANG === 'en'){
+    if (m < 60) return m + ' min';
+    var h2 = Math.floor(m/60), r2 = m % 60;
+    return r2 ? (h2 + 'h ' + r2 + 'm') : (h2 + 'h');
+  }
+  if (m < 60) return m + ' 分';
+  var h = Math.floor(m/60), r = m % 60;
+  return r ? (h + ' 小时 ' + r + ' 分') : (h + ' 小时');
+}
+function diffMin(s, e){
+  if (!s || !e) return 0;
+  var a = s.split(':').map(Number), b = e.split(':').map(Number);
+  var d = (b[0]*60 + b[1]) - (a[0]*60 + a[1]);
+  if (d <= 0) d += 1440;
+  return d;
+}
+function dayKeyOf(ts){
+  var d = new Date(ts);
+  var base = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  if (d.getHours() < RESET_HOUR) base.setDate(base.getDate() - 1);
+  return fmtDate(base);
+}
+function todayKey(){ return dayKeyOf(Date.now()); }
+function dayLabel(k){
+  var d = parseDate(k);
+  var t = todayKey();
+  if (LANG === 'en'){
+    var head2 = MON_EN[d.getMonth()] + ' ' + d.getDate() + ' ' + WEEK_EN[d.getDay()];
+    if (k === t) return head2 + ' · today';
+    if (k === addDays(t,-1)) return head2 + ' · yesterday';
+    return head2;
+  }
+  var head = (d.getMonth()+1) + '月' + d.getDate() + '日 ' + WEEK_ZH[d.getDay()];
+  if (k === t) return head + ' · 今天';
+  if (k === addDays(t,-1)) return head + ' · 昨天';
+  return head;
+}
+function colLabel(c){ return LANG === 'en' ? COL_EN[c] : COL_ZH[c]; }
+function coefLine(p){
+  return LANG === 'en'
+    ? ('E ' + fmtPts(p.energy) + ' · A ' + fmtPts(p.attention))
+    : ('精 ' + fmtPts(p.energy) + ' · 注 ' + fmtPts(p.attention));
+}
+function headerDate(d){
+  if (LANG === 'en') return MON_EN[d.getMonth()] + ' ' + d.getDate() + ' ' + WEEK_EN[d.getDay()];
+  return (d.getMonth()+1) + '月' + d.getDate() + '日 ' + WEEK_ZH[d.getDay()];
+}
+
+/* ================= 状态 ================= */
+var S = null;
+var ui = {view:'home', sheet:null, revTab:'daily', openDay:null, range:7, clearArmed:false,
+          waterPct:{}, waterDay:'', showDeleted:false};
+
+function seedState(){
+  return {
+    v: 1,
+    createdAt: Date.now(),
+    config: {
+      set: false,
+      lang: null,
+      limitMin: null,
+      energyThr: 200,        /* 用户自己定的默认刻度 */
+      attentionThr: 200,
+      nextWindow: {date:'', start:'', end:''},
+      noshowPolicy: 'postpone'
+    },
+    presets: PRESET_SEED.map(function(p){
+      return {id:p.id, name:p.name, column:p.column,
+              energy:p.energy, attention:p.attention, naturalEnd:p.naturalEnd};
+    }),
+    entries: [],
+    blocks: [],
+    days: {}
+  };
+}
+function load(){
+  try {
+    var raw = localStorage.getItem(KEY);
+    /* localStorage 读不到时，退回到 APK 的私有存档 */
+    if (!raw){
+      try {
+        if (window.AndroidApp && window.AndroidApp.loadState) raw = window.AndroidApp.loadState();
+      } catch (e2) {}
+    }
+    if (!raw) { S = seedState(); return; }
+    var o = JSON.parse(raw);
+    S = seedState();
+    if (o && typeof o === 'object') {
+      S.v = o.v || 1;
+      S.createdAt = o.createdAt || Date.now();
+      S.config = Object.assign(S.config, o.config || {});
+      S.config.nextWindow = Object.assign({date:'',start:'',end:''}, (o.config||{}).nextWindow || {});
+      if (Array.isArray(o.presets) && o.presets.length) S.presets = o.presets;
+      if (Array.isArray(o.entries)) S.entries = o.entries;
+      if (Array.isArray(o.blocks)) S.blocks = o.blocks;
+      if (o.days && typeof o.days === 'object') S.days = o.days;
+    }
+  } catch (e) {
+    S = seedState();
+  }
+}
+function save(){
+  var json = JSON.stringify(S);
+  var ok = false;
+  try { localStorage.setItem(KEY, json); ok = true; } catch (e) {}
+  /* 装在 APK 里时，再写一份到应用私有目录，双保险 */
+  try {
+    if (window.AndroidApp && window.AndroidApp.saveState){
+      window.AndroidApp.saveState(json);
+      ok = true;
+    }
+  } catch (e) {}
+  if (!ok) toast('本地存储写入失败');
+}
+
+/* ================= 预设与刻度 ================= */
+function presetById(id){
+  for (var i=0;i<S.presets.length;i++) if (S.presets[i].id === id) return S.presets[i];
+  return null;
+}
+function liveSnap(){
+  var c = S.config;
+  return {limitMin: Number(c.limitMin) || 0, energyThr: Number(c.energyThr) || 0, attentionThr: Number(c.attentionThr) || 0};
+}
+function daySnap(k){
+  if (k >= todayKey()) return liveSnap();
+  var s = S.days[k];
+  return s ? {limitMin:s.limitMin, energyThr:s.energyThr, attentionThr:s.attentionThr} : liveSnap();
+}
+function ensureSnap(k){
+  if (!S.days[k]) {
+    var s = liveSnap();
+    S.days[k] = {limitMin:s.limitMin, energyThr:s.energyThr, attentionThr:s.attentionThr, at: Date.now()};
+  }
+}
+
+/* ================= 统计 ================= */
+function dayStats(k){
+  var snap = daySnap(k);
+  var all = S.entries.filter(function(e){ return e.dateKey === k; });
+  var es = all.filter(function(e){ return !e.deleted; });
+  var dels = all.filter(function(e){ return !!e.deleted; });
+  var time = 0, energy = 0, attention = 0, high = 0, low = 0;
+  for (var i=0;i<es.length;i++){
+    var e = es[i];
+    if (e.column === 'white') continue;
+    time += e.minutes;
+    energy += e.minutes * e.energyCoef;
+    attention += e.minutes * e.attentionCoef;
+    if (e.column === 'high') high += e.minutes; else low += e.minutes;
+  }
+  var rTime = 0, rEnergy = 0, rAttention = 0;
+  for (var j=0;j<S.blocks.length;j++){
+    var b = S.blocks[j];
+    if (b.reserveDate === k && b.status === 'reserved'){
+      rTime += b.plannedMinutes;
+      rEnergy += b.plannedMinutes * b.energyCoef;
+      rAttention += b.plannedMinutes * b.attentionCoef;
+    }
+  }
+  return {
+    key: k, snap: snap, entries: es, deleted: dels,
+    time: time, energy: energy, attention: attention, high: high, low: low,
+    rTime: rTime, rEnergy: rEnergy, rAttention: rAttention,
+    timeLeft: snap.limitMin - time - rTime,
+    energyLeft: snap.energyThr - energy - rEnergy,
+    attentionLeft: snap.attentionThr - attention - rAttention
+  };
+}
+function findEntry(id){
+  for (var i=0;i<S.entries.length;i++) if (S.entries[i].id === id) return S.entries[i];
+  return null;
+}
+function snapshotOf(e){
+  return {name:e.name, presetId:e.presetId, column:e.column,
+    energyCoef:e.energyCoef, attentionCoef:e.attentionCoef,
+    minutes:e.minutes, ts:e.ts, dateKey:e.dateKey, stopPoint:e.stopPoint || ''};
+}
+function statusOf(st){
+  var tv = st.timeLeft <= 0;
+  var ev = st.energyLeft <= 0;
+  var av = st.attentionLeft <= 0;
+  var code = tv ? 'timeout' : ((ev || av) ? 'threshold' : 'open');
+  return {code: code, tv: tv, ev: ev, av: av};
+}
+/* 准入判断：不用于中途熔断 */
+function canStart(p, st, s){
+  if (!S.config.set) return false;
+  if (p.column === 'white') return true;
+  if (st.timeLeft <= 0) return false;
+  if (p.column === 'high' && (s.ev || s.av)) return false;
+  return true;
+}
+/* 触线时刻：按当日原始登记顺序回放，只用实际发生（不含预留） */
+function crossings(k){
+  var snap = daySnap(k);
+  var st = dayStats(k);
+  var list = st.entries.filter(function(e){ return e.column !== 'white'; })
+                        .slice().sort(function(a,b){ return a.ts - b.ts; });
+  var t = 0, en = 0, at = 0;
+  var out = {time:null, energy:null, attention:null};
+  for (var i=0;i<list.length;i++){
+    var e = list[i];
+    t += e.minutes; en += e.minutes * e.energyCoef; at += e.minutes * e.attentionCoef;
+    if (!out.time && snap.limitMin > 0 && t >= snap.limitMin) out.time = {ts:e.ts, entry:e};
+    if (!out.energy && snap.energyThr > 0 && en >= snap.energyThr) out.energy = {ts:e.ts, entry:e};
+    if (!out.attention && snap.attentionThr > 0 && at >= snap.attentionThr) out.attention = {ts:e.ts, entry:e};
+  }
+  return out;
+}
+function allKeys(){
+  var set = {};
+  S.entries.forEach(function(e){ set[e.dateKey] = 1; });
+  S.blocks.forEach(function(b){ if (b.reserveDate) set[b.reserveDate] = 1; });
+  return Object.keys(set).sort().reverse();
+}
+function nextBlock(){
+  var t = todayKey();
+  var cand = S.blocks.filter(function(b){ return b.status === 'reserved' && b.reserveDate >= t; })
+                     .sort(function(a,b){ return (a.reserveDate + a.start).localeCompare(b.reserveDate + b.start); });
+  if (cand.length) return cand[0];
+  var pend = S.blocks.filter(function(b){ return b.status === 'pendingWindow'; });
+  return pend.length ? pend[0] : null;
+}
+function blockWhen(b){
+  if (!b || b.status === 'pendingWindow') return '待排窗口';
+  var t = todayKey();
+  var d = b.reserveDate === t ? '今天'
+        : (b.reserveDate === addDays(t,1) ? '明天'
+        : ((parseDate(b.reserveDate).getMonth()+1) + '/' + parseDate(b.reserveDate).getDate()));
+  return d + ' ' + b.start + '–' + b.end;
+}
+/* 首页用的短格式：主值只有“日期 + 开始”，其余进副行 */
+function blockShort(b){
+  if (!b || b.status === 'pendingWindow') return '待排窗口';
+  var t = todayKey();
+  var d = b.reserveDate === t ? '今天'
+        : (b.reserveDate === addDays(t,1) ? '明天'
+        : ((parseDate(b.reserveDate).getMonth()+1) + '/' + parseDate(b.reserveDate).getDate()));
+  return d + ' ' + b.start;
+}
+function blockStatusText(b){
+  switch(b.status){
+    case 'reserved': return '已预留';
+    case 'used': return '已发生';
+    case 'noshowPostponed': return '爽约 · 顺延';
+    case 'noshowZero': return '爽约 · 归零';
+    case 'cancelled': return '已取消';
+    case 'pendingWindow': return '待排窗口';
+    default: return b.status;
+  }
+}
+
+/* ================= 写入 ================= */
+function addEntry(o){
+  var p = presetById(o.presetId);
+  if (!p) return null;
+  var ts = o.ts || Date.now();
+  var k = dayKeyOf(ts);
+  ensureSnap(k);
+  var white = p.column === 'white';
+  var e = {
+    id: uid(), dateKey: k, ts: ts,
+    presetId: p.id, name: p.name, column: p.column,
+    energyCoef: white ? 0 : p.energy,
+    attentionCoef: white ? 0 : p.attention,
+    minutes: Math.max(1, Math.round(o.minutes)),
+    naturalEnd: !!p.naturalEnd,
+    kind: o.kind || 'normal',
+    blockId: o.blockId || null,
+    stopPoint: o.stopPoint || '',
+    lockScreen: (!white && !p.naturalEnd && p.column === 'high')
+  };
+  S.entries.push(e);
+  save();
+  return e;
+}
+
+/* ================= 视图：首页 ================= */
+/* 柱子的比例尺：ppu = 每 1 单位值对应多少像素；拖动时按此 1:1 换算 */
+var BAR = {
+  time:      {label:'时间',   field:'limitMin',     unit:'分', ppu:0.50, step:5, min:30, max:600},
+  energy:    {label:'精力',   field:'energyThr',    unit:'点', ppu:0.70, step:5, min:50, max:2000},
+  attention: {label:'注意力', field:'attentionThr', unit:'点', ppu:0.70, step:5, min:50, max:2000}
+};
+function maxBarH(){ return (window.innerWidth <= 400) ? 184 : 216; }
+function barPx(cfg, v){ return Math.max(56, Math.min(maxBarH(), Math.round(v * cfg.ppu))); }
+/* 拖动时的像素换算：值很大时按当前值折算，避免柱子被顶到上限后拖不动 */
+function dragPpu(cfg, v){
+  if (v <= 0) return cfg.ppu;
+  return Math.min(cfg.ppu, maxBarH() / v);
+}
+function fmtPts(v){
+  var r = Math.round((Number(v) || 0) * 10) / 10;
+  return Math.abs(r - Math.round(r)) < 0.01 ? String(Math.round(r)) : r.toFixed(1);
+}
+function fmtThr(v){ return fmtPts(v); }
+function barValue(st, key){
+  var cfg = BAR[key];
+  var thr = Number(st.snap[cfg.field]) || 0;
+  var played = key === 'time' ? st.time : (key === 'energy' ? st.energy : st.attention);
+  var res    = key === 'time' ? st.rTime : (key === 'energy' ? st.rEnergy : st.rAttention);
+  var used = played + res;
+  return {cfg:cfg, thr:thr, played:played, res:res, used:used,
+    pct: thr > 0 ? Math.min(100, used / thr * 100) : 0,
+    resPct: used > 0 ? Math.min(100, res / used * 100) : 0,
+    over: thr > 0 && used >= thr,
+    left: Math.max(0, thr - used)};
+}
+function barHTML(key, st){
+  var b = barValue(st, key);
+  var prev = (typeof ui.waterPct[key] === 'number') ? ui.waterPct[key] : 0;
+  var shown = key === 'time' ? String(Math.round(b.left)) : fmtPts(b.left);
+  return '<div class="bcol" data-k="' + key + '">' +
+    '<div class="bstack">' +
+      '<div class="bthr' + (b.over ? ' over' : '') + '">' + fmtThr(b.thr) + '</div>' +
+      '<div class="btrack' + (b.over ? ' over' : '') + '" data-k="' + key + '" style="height:' + barPx(b.cfg, b.thr) + 'px">' +
+        '<div class="bwater' + (b.used <= 0 ? ' empty' : '') + '" style="height:' + prev + '%" data-pct="' + b.pct.toFixed(2) + '">' +
+          (b.resPct > 0.3 ? '<div class="bres" style="height:' + b.resPct.toFixed(1) + '%"></div>' : '') +
+          '<i class="crest"></i><i class="crest c2"></i>' +
+        '</div>' +
+      '</div>' +
+    '</div>' +
+    '<div class="brem">剩 <b>' + shown + '</b><i>' + b.cfg.unit + '</i></div>' +
+    '<div class="bname">' + b.cfg.label + '</div>' +
+  '</div>';
+}
+function paintWater(){
+  Object.keys(BAR).forEach(function(key){
+    var w = document.querySelector('.bcol[data-k="' + key + '"] .bwater');
+    if (!w) return;
+    var target = Number(w.getAttribute('data-pct')) || 0;
+    w.style.height = target + '%';
+    ui.waterPct[key] = target;
+  });
+}
+/* 拖动时只改这一列的 DOM，不整体重绘 */
+function refreshColumn(key, ppuOverride){
+  var b = barValue(dayStats(todayKey()), key);
+  var col = document.querySelector('.bcol[data-k="' + key + '"]');
+  if (!col) return;
+  var track = col.querySelector('.btrack');
+  var water = col.querySelector('.bwater');
+  var thrEl = col.querySelector('.bthr');
+  var remEl = col.querySelector('.brem');
+  var ppu = ppuOverride || b.cfg.ppu;
+  track.style.height = Math.max(56, Math.min(maxBarH(), Math.round(b.thr * ppu))) + 'px';
+  track.classList.toggle('over', b.over);
+  thrEl.classList.toggle('over', b.over);
+  thrEl.textContent = fmtThr(b.thr);
+  water.style.height = b.pct.toFixed(2) + '%';
+  water.classList.toggle('empty', b.used <= 0);
+  remEl.innerHTML = '剩 <b>' + (key === 'time' ? Math.round(b.left) : fmtPts(b.left)) + '</b><i>' + b.cfg.unit + '</i>';
+}
+
+function storageBanner(){
+  if (storageOK) return '';
+  return '<div class="banner">这个环境不允许本地存储，数据只在本次打开期间有效。换用 Chrome 打开，或使用安装版（数据存在应用内，不会丢）。</div>';
+}
+function viewHome(){
+  var k = todayKey();
+  var st = dayStats(k);
+  var s = statusOf(st);
+  var nb = nextBlock();
+  var d = new Date();
+  var head = headerDate(d);
+
+  var main, sub;
+  if (s.code === 'open'){
+    main = '可以开下一场';
+    sub = '高消耗 / 低消耗 都可登记';
+  } else if (s.code === 'threshold'){
+    main = '当日已触线 · 仅低消耗';
+    var who = (s.ev && s.av) ? '精力与注意力都到阈值' : (s.ev ? '精力到阈值' : '注意力到阈值');
+    sub = who + (st.timeLeft > 0 ? '，剩余时间只流向低消耗' : '，且时间已用尽');
+  } else {
+    main = '当日已触线 · 时间用尽';
+    sub = '今天的额度到这里';
+  }
+  if (st.rTime > 0 && s.code !== 'open'){
+    sub += '（含今日预留 ' + st.rTime + ' 分）';
+  }
+
+  var actHTML = '';
+  if (s.code !== 'open'){
+    var anyLock = st.entries.some(function(e){ return e.lockScreen; });
+    actHTML = '<div class="act">' +
+      '<div class="act-main"><b>起身倒水</b><span class="arrow">→</span><b>正事只做开头 2 分钟</b></div>' +
+      (anyLock ? '<div class="act-note">今天登记过信息流类（无自然终点）：到线即锁屏</div>' : '') +
+    '</div>';
+  }
+
+  var blockRow = '<button class="brow" data-act="open-blocks">' +
+    '<span class="bk">下一冻结块</span>' +
+    '<span class="bv">' + (nb ? (blockWhen(nb) + ' · ' + nb.plannedMinutes + ' 分') : '无') + '</span>' +
+    '<span class="ba">›</span>' +
+  '</button>';
+
+  return '' +
+  '<div class="hd"><span>' + head + '</span><span class="r">每日 ' + pad(RESET_HOUR) + ':00 结算</span></div>' +
+  storageBanner() +
+  '<div class="status" data-code="' + s.code + '">' +
+    '<div class="big">' + main + '</div>' +
+    '<div class="sub">' + sub + '</div>' +
+  '</div>' +
+  '<div class="bars">' +
+    barHTML('time', st) + barHTML('energy', st) + barHTML('attention', st) +
+    '<div class="bhint">拖动柱子顶端 = 直接改这一项的阈值</div>' +
+  '</div>' +
+  actHTML +
+  blockRow +
+  '<button class="primary" data-act="open-register">登记一场</button>' +
+  '<button class="ghost" data-act="open-reserve">预约联机（冻结块）</button>' +
+  '<div class="foot"><button data-act="go-review">回顾</button><button data-act="go-settings">设置</button></div>';
+}
+
+/* ================= 视图：选择语言 ================= */
+function viewLang(){
+  return '' +
+  '<div class="hd"><span>刻度 · Scale</span><span class="r">v' + APP_VERSION + '</span></div>' +
+  '<div class="status" data-code="open">' +
+    '<div class="big">选择语言 · Choose language</div>' +
+    '<div class="sub">之后可以在设置里改 · You can change it later in Settings</div>' +
+  '</div>' +
+  '<button class="primary" data-act="lang" data-v="zh" style="margin-top:20px">中文</button>' +
+  '<button class="ghost" data-act="lang" data-v="en">English</button>';
+}
+function setLanguage(l){
+  LANG = (l === 'en') ? 'en' : 'zh';
+  S.config.lang = LANG;
+  save();
+  if (ui.view === 'lang') ui.view = S.config.set ? 'home' : 'setup';
+  render();
+}
+
+/* ================= 视图：首次刻度设定 ================= */
+function viewSetup(){
+  var c = S.config;
+  var ready = Number(c.limitMin) > 0 && Number(c.energyThr) > 0 && Number(c.attentionThr) > 0;
+  return '' +
+  '<div class="hd"><span>刻度</span><span class="r">本机存储</span></div>' +
+  storageBanner() +
+  '<div class="status" data-code="open"><div class="big">先把刻度定下来</div>' +
+    '<div class="sub">精力与注意力已按你定的 200 预填，随时可改；每日上限由你填。</div></div>' +
+  '<div class="sec">' +
+    '<div class="field"><label>每日上限<span class="hint">分钟，唯一的硬时间闸门</span></label>' +
+      '<input type="number" inputmode="numeric" min="1" value="' + (c.limitMin || '') + '" data-set="limit" placeholder="分钟"></div>' +
+    '<div class="field"><label>精力阈值<span class="hint">点 = 分钟 × 精力系数</span></label>' +
+      '<input type="number" inputmode="numeric" min="1" value="' + (c.energyThr || '') + '" data-set="ethr" placeholder="点"></div>' +
+    '<div class="field"><label>注意力阈值<span class="hint">点 = 分钟 × 注意力系数</span></label>' +
+      '<input type="number" inputmode="numeric" min="1" value="' + (c.attentionThr || '') + '" data-set="athr" placeholder="点"></div>' +
+    '<div class="note" style="margin-top:10px">这里的「时间」只算工作与睡觉之外的闲置时间（娱乐时间），不是一整天。</div>' +
+    '<div class="note">阈值定下来之后，每个活动的系数可以在设置里用「按等效分钟算系数」反推：系数 = 阈值 ÷ 整日等效分钟。</div>' +
+  '</div>' +
+  '<button class="primary" data-act="finish-setup" ' + (ready ? '' : 'disabled') + '>用这套刻度开始</button>';
+}
+
+/* ================= 视图：回顾 ================= */
+function viewReview(){
+  var tab = ui.revTab || 'daily';
+  return '' +
+  '<div class="topbar"><button class="back" data-act="home">←</button><b>回顾</b>' +
+    '<span style="margin-left:auto;font-size:11.5px;color:var(--ink3)">点行可修正</span></div>' +
+  '<div class="tabs">' +
+    '<button class="tab ' + (tab==='daily'?'on':'') + '" data-act="rev-tab" data-tab="daily">每日</button>' +
+    '<button class="tab ' + (tab==='overview'?'on':'') + '" data-act="rev-tab" data-tab="overview">总览</button>' +
+  '</div>' +
+  (tab === 'daily' ? reviewDaily() : reviewOverview());
+}
+function reviewDaily(){
+  var keys = allKeys();
+  if (!keys.length) return '<div class="emptynote">还没有任何登记。</div>';
+  return keys.map(function(k){
+    var st = dayStats(k);
+    var s = statusOf(st);
+    var cx = crossings(k);
+    var open = ui.openDay === k;
+    var isFuture = k > todayKey();
+    var flags = [];
+    if (!isFuture){
+      if (s.tv) flags.push('时间用尽');
+      if (s.ev) flags.push('精力触线');
+      if (s.av) flags.push('注意力触线');
+    }
+    var tail = flags.length ? (' · ' + flags.join(' · '))
+             : (isFuture ? ' · 未到' : ' · 未触线');
+    if (st.rTime > 0) tail += ' · 预留 ' + st.rTime + ' 分';
+    var hd = '<button class="day-hd" data-act="toggle-day" data-key="' + k + '">' +
+      '<span class="d">' + dayLabel(k) + '</span>' +
+      '<span class="m">' + fmtMin(st.time) + ' / ' + st.snap.limitMin + ' 分' + tail + '</span>' +
+    '</button>';
+    if (!open) return '<div class="day">' + hd + '</div>';
+
+    var rows = st.entries.slice().sort(function(a,b){ return a.ts - b.ts; }).map(function(e){
+      var marks = '';
+      if (e.kind === 'block') marks += '<span class="tagline">冻结块</span>';
+      if (e.lockScreen) marks += '<span class="tagline">绑锁屏</span>';
+      if (e.stopPoint) marks += '<span class="tagline">停点</span>';
+      if (e.column === 'white') marks += '<span class="tagline">不计入</span>';
+      if (e.revs && e.revs.length) marks += '<span class="tagline changed">改过</span>';
+      return '<tr class="erow" data-act="edit-entry" data-id="' + e.id + '">' +
+        '<td class="num">' + hhmm(e.ts) + '</td>' +
+        '<td>' + esc(e.name) + marks + '</td>' +
+        '<td class="num">' + e.minutes + '</td>' +
+        '<td class="num">' + (e.column === 'white' ? '—' : fmtPts(e.energyCoef)) + '</td>' +
+        '<td class="num">' + (e.column === 'white' ? '—' : fmtPts(e.attentionCoef)) + '</td>' +
+        '<td>' + colLabel(e.column) + '</td>' +
+      '</tr>';
+    }).join('');
+
+    var delHTML = '';
+    if (st.deleted.length){
+      delHTML = '<div class="meta"><button class="linky" data-act="toggle-deleted">' +
+        (ui.showDeleted ? '收起已删除' : ('已删除 ' + st.deleted.length + ' 条 · 显示')) + '</button></div>';
+      if (ui.showDeleted){
+        delHTML += '<table><tbody>' + st.deleted.map(function(e){
+          return '<tr class="erow deleted">' +
+            '<td class="num">' + hhmm(e.ts) + '</td>' +
+            '<td>' + esc(e.name) + '<span class="tagline">已删</span></td>' +
+            '<td class="num">' + e.minutes + '</td>' +
+            '<td class="num" colspan="2"></td>' +
+            '<td><button class="linky" data-act="entry-restore" data-id="' + e.id + '">恢复</button></td>' +
+          '</tr>';
+        }).join('') + '</tbody></table>';
+      }
+    }
+
+    var stopLines = st.entries.filter(function(e){ return e.stopPoint; }).map(function(e){
+      return '<div class="meta"><span class="lbl">外置停点：</span>' + esc(e.stopPoint) + '</div>';
+    }).join('');
+
+    var cxLine = [];
+    if (cx.time) cxLine.push('时间到上限 ' + hhmm(cx.time.ts));
+    if (cx.energy) cxLine.push('精力 ' + hhmm(cx.energy.ts));
+    if (cx.attention) cxLine.push('注意力 ' + hhmm(cx.attention.ts));
+    var cxText = cxLine.length ? cxLine.join(' · ') : (isFuture ? '未到' : '当日未触线');
+
+    var blks = S.blocks.filter(function(b){ return b.reserveDate === k; });
+    var blkHTML = blks.length ? ('<div class="meta"><span class="lbl">冻结块：</span>' + blks.map(function(b){
+      return b.start + '–' + b.end + ' · ' + esc(b.presetName) + ' · ' + b.plannedMinutes + ' 分 · ' + blockStatusText(b);
+    }).join('；') + '</div>') : '';
+
+    return '<div class="day">' + hd +
+      '<div class="day-bd">' +
+        '<table><thead><tr><th>时刻</th><th>活动</th><th>分</th><th>精</th><th>注</th><th>列</th></tr></thead>' +
+        '<tbody>' + (rows || '<tr><td colspan="6" style="color:var(--ink3)">当天只有冻结块，没有登记。</td></tr>') + '</tbody></table>' +
+        delHTML +
+        blkHTML +
+        stopLines +
+        '<div class="meta"><span class="lbl">触线：</span>' + cxText + '</div>' +
+      '</div></div>';
+  }).join('') +
+  '<div class="note">点某一行可以修正它（活动 / 时长 / 开始时间）或删掉；改动会留原始值，不静默覆盖。</div>';
+}
+function reviewOverview(){
+  var range = ui.range;
+  var t = todayKey();
+  var keys = allKeys().filter(function(k){ return k <= t; });
+  if (range !== 0){
+    var from = addDays(t, -(range - 1));
+    keys = keys.filter(function(k){ return k >= from; });
+  }
+  var blks = S.blocks.filter(function(b){
+    if (!b.reserveDate) return false;
+    if (b.reserveDate > t) return false;
+    if (range !== 0 && b.reserveDate < addDays(t, -(range-1))) return false;
+    return true;
+  });
+  var nBlock = blks.length;
+  var nNoshow = blks.filter(function(b){ return b.status === 'noshowPostponed' || b.status === 'noshowZero'; }).length;
+  var nPost = blks.filter(function(b){ return b.status === 'noshowPostponed'; }).length;
+  var nZero = blks.filter(function(b){ return b.status === 'noshowZero'; }).length;
+  var nPending = S.blocks.filter(function(b){
+    if (b.status === 'pendingWindow') return true;
+    return b.status === 'reserved' && b.reserveDate > t;
+  }).length;
+
+  var sumHTML;
+  if (LANG === 'en'){
+    sumHTML = '<div class="summary">' +
+      (range === 0 ? 'All time' : ('Last ' + range + ' days')) + ' · <b>' + keys.length + '</b> days with entries<br>' +
+      'Frozen blocks <b>' + nBlock + '</b> · no-show <b>' + nNoshow + '</b> (postponed <b>' + nPost + '</b> · voided <b>' + nZero + '</b>)' +
+      (nPending ? '<br>Reserved, not yet due <b>' + nPending + '</b>' : '') +
+    '</div>';
+  } else {
+    sumHTML = '<div class="summary">' +
+      '近' + (range === 0 ? '全部' : range + ' 天') + ' 有登记 <b>' + keys.length + '</b> 天<br>' +
+      '冻结块 <b>' + nBlock + '</b> 次 · 爽约 <b>' + nNoshow + '</b> 次（顺延 <b>' + nPost + '</b> · 归零 <b>' + nZero + '</b>）' +
+      (nPending ? '<br>在约未到 <b>' + nPending + '</b> 次' : '') +
+    '</div>';
+  }
+
+  var rows = keys.map(function(k){
+    var st = dayStats(k);
+    var cx = crossings(k);
+    var hit = [];
+    if (cx.time) hit.push('时间');
+    if (cx.energy) hit.push('精力');
+    if (cx.attention) hit.push('注意力');
+    var tot = Math.max(st.snap.limitMin, st.time, 1);
+    var wHi = Math.min(100, st.high / tot * 100);
+    var wLo = Math.min(100 - wHi, st.low / tot * 100);
+    return '<div class="day">' +
+      '<div class="day-hd" style="padding-bottom:8px">' +
+        '<span class="d">' + dayLabel(k) + '</span>' +
+        '<span class="m">' + fmtMin(st.time) + ' / ' + st.snap.limitMin + ' 分 · ' + (hit.length ? '触线 ' + hit.join('+') : '未触线') + '</span>' +
+      '</div>' +
+      '<div class="day-bd" style="border-top:0;padding-top:0">' +
+        '<div class="bar"><i class="hi" style="width:' + wHi + '%"></i><i class="lo" style="width:' + wLo + '%"></i></div>' +
+        '<div class="meta"><span class="lbl">高消耗</span> ' + fmtMin(st.high) + ' · <span class="lbl">低消耗</span> ' + fmtMin(st.low) + '</div>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+
+  return '' +
+  '<div class="range">' +
+    '<button class="' + (range===7?'on':'') + '" data-act="range" data-v="7">近 7 天</button>' +
+    '<button class="' + (range===30?'on':'') + '" data-act="range" data-v="30">近 30 天</button>' +
+    '<button class="' + (range===0?'on':'') + '" data-act="range" data-v="0">全部</button>' +
+  '</div>' +
+  sumHTML +
+  (rows || '<div class="emptynote">这个范围内没有登记。</div>') +
+  '<div class="legend"><span><i style="background:var(--barH)"></i>高消耗</span><span><i style="background:var(--barL)"></i>低消耗</span><span>浅色底 = 当日上限</span></div>';
+}
+
+/* ================= 视图：设置 ================= */
+function viewSettings(){
+  var c = S.config;
+  var last = S.entries.length ? S.entries[S.entries.length-1] : null;
+  var list = S.presets.map(function(p){
+    var coefs = p.column === 'white'
+      ? '<span class="pmuted">白名单：不计入任何额度</span>'
+      : ('<span class="coef"><span>精力</span>' +
+         '<input type="number" inputmode="decimal" step="0.1" min="0" max="9" value="' + fmtPts(p.energy) + '" data-pid="' + p.id + '" data-pfield="energy"></span>' +
+         '<span class="coef"><span>注意力</span>' +
+         '<input type="number" inputmode="decimal" step="0.1" min="0" max="9" value="' + fmtPts(p.attention) + '" data-pid="' + p.id + '" data-pfield="attention"></span>');
+    return '<div class="prow">' +
+      '<div class="l1">' +
+        '<input class="pname" type="text" value="' + esc(p.name) + '" data-pid="' + p.id + '" data-pfield="name">' +
+        '<select data-pid="' + p.id + '" data-pfield="column">' +
+          ['high','low','white'].map(function(v){
+            return '<option value="' + v + '"' + (p.column===v?' selected':'') + '>' + colLabel(v) + '</option>';
+          }).join('') +
+        '</select>' +
+      '</div>' +
+      '<div class="l2">' + coefs +
+        '<button class="mini-btn ' + (p.naturalEnd ? '' : 'on') + '" data-pid="' + p.id + '" data-pfield="endtoggle">' +
+          (p.naturalEnd ? '有终点' : '无终点') +
+        '</button>' +
+        '<button class="mini-btn del" data-act="del-preset" data-pid="' + p.id + '">删除</button>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+
+  return '' +
+  '<div class="topbar"><button class="back" data-act="home">←</button><b>设置</b></div>' +
+
+  '<div class="sec">' +
+    '<div class="sec-hd">刻度（也能在首页直接拖柱子改）</div>' +
+    '<div class="field"><label>每日上限</label><input type="number" inputmode="numeric" min="1" value="' + (c.limitMin||'') + '" data-set="limit"><span style="font-size:12px;color:var(--ink3)">分钟</span></div>' +
+    '<div class="field"><label>精力阈值</label><input type="number" inputmode="numeric" min="1" value="' + (c.energyThr||'') + '" data-set="ethr"><span style="font-size:12px;color:var(--ink3)">点</span></div>' +
+    '<div class="field"><label>注意力阈值</label><input type="number" inputmode="numeric" min="1" value="' + (c.attentionThr||'') + '" data-set="athr"><span style="font-size:12px;color:var(--ink3)">点</span></div>' +
+    '<div class="note">点 = 分钟 × 系数。改后今天即生效；已过去的日子保留当时的刻度。</div>' +
+    '<div class="note">这里的「时间」只算工作与睡觉之外的闲置时间（娱乐时间），不是一整天。</div>' +
+  '</div>' +
+  '<div class="sec">' +
+    '<div class="sec-hd">下次联机窗口（爽约“顺延”落在这里）</div>' +
+    '<div class="field"><label>日期</label><input type="date" value="' + (c.nextWindow.date||'') + '" data-set="nw-date"></div>' +
+    '<div class="field"><label>开始</label><input type="time" value="' + (c.nextWindow.start||'') + '" data-set="nw-start"></div>' +
+    '<div class="field"><label>结束</label><input type="time" value="' + (c.nextWindow.end||'') + '" data-set="nw-end"></div>' +
+    '<div class="field"><label>新建预约时默认兜底<span class="hint">写死在每一条预约里，爽约时不再问</span></label>' +
+      '<select data-set="nwpolicy">' +
+        '<option value="postpone"' + (c.noshowPolicy==='postpone'?' selected':'') + '>顺延到下次窗口</option>' +
+        '<option value="zero"' + (c.noshowPolicy==='zero'?' selected':'') + '>直接归零</option>' +
+      '</select></div>' +
+  '</div>' +
+
+  '<div class="sec">' +
+    '<div class="sec-hd">活动预设表（系数自己填，0–9，可带小数）</div>' +
+    '<button class="ghost" data-act="open-calc" style="margin:2px 0 6px">按等效分钟算系数</button>' +
+    list +
+    '<button class="ghost" data-act="add-preset" style="margin-top:12px">＋ 新增自定义事件</button>' +
+    '<div class="note">新增后立刻出现在首页「登记一场」里，常用项会排在最上面。系数只在这里手改，程序不会自动调。“无终点”= 没有自然结束点：高消耗列的无终点活动到线即绑锁屏；低消耗列的无终点活动，开局前必须先写下外置停点。</div>' +
+  '</div>' +
+
+  '<div class="sec">' +
+    '<div class="sec-hd">数据</div>' +
+    '<button class="ghost" data-act="export">导出 JSON（含全部历史）</button>' +
+    '<button class="ghost" data-act="import">导入 JSON（迁移或恢复）</button>' +
+    '<button class="ghost" data-act="undo"' + (last ? '' : ' disabled') + '>' +
+      (last ? '撤销上一次登记（' + esc(last.name) + ' ' + last.minutes + ' 分）' : '撤销上一次登记（无记录）') +
+    '</button>' +
+    (ui.clearArmed
+      ? '<div class="row"><button class="primary danger solid" data-act="clear-confirm">确认清空</button>' +
+        '<button class="ghost" data-act="clear-cancel">取消</button></div>' +
+        '<div class="note">将删除全部登记、冻结块与按日刻度快照；预设表与当前刻度保留。</div>'
+      : '<button class="ghost danger" data-act="clear-arm">一键清空历史</button>') +
+  '</div>' +
+
+  '<div class="sec">' +
+    '<div class="sec-hd">通用</div>' +
+    '<div class="field"><label>语言</label>' +
+      '<span class="seg">' +
+        '<button class="' + (LANG === 'zh' ? 'on' : '') + '" data-act="lang" data-v="zh">中文</button>' +
+        '<button class="' + (LANG === 'en' ? 'on' : '') + '" data-act="lang" data-v="en">EN</button>' +
+      '</span>' +
+    '</div>' +
+    '<div class="field"><label>版本<span class="hint">v' + APP_VERSION + ' · ' + REPO + '</span></label>' +
+      '<button class="mini-btn" data-act="check-update">检查更新</button>' +
+    '</div>' +
+    '<div class="note">只有点这一下（含下载更新）才联网；平时完全不发请求。</div>' +
+  '</div>' +
+
+  '<div class="foot"><button data-act="home">回到首页</button></div>';
+}
+function clampNum(v, lo, hi, dflt){
+  var n = (v === '' || v === null || typeof v === 'undefined') ? NaN : Number(v);
+  if (!isFinite(n)) n = dflt;
+  return Math.max(lo, Math.min(hi, Math.round(n * 10) / 10));
+}
+
+/* ================= 弹层内容 ================= */
+function sheetWrap(title, body, extraHead){
+  return '<div class="sheet-hd"><b>' + title + '</b>' + (extraHead || '') + '<button class="x" data-act="close-sheet">关闭</button></div>' +
+         '<div class="sheet-bd">' + body + '</div>';
+}
+function sheetRegister(){
+  var k = todayKey();
+  var st = dayStats(k);
+  var s = statusOf(st);
+  var d = ui.sheet.ctx;
+  d.stopPoint = (typeof d.stopPoint === 'string') ? d.stopPoint : '只查完这一个问题';
+
+  var html = '';
+
+  /* 最近用过的（最多 3 个）——最常回访的入口放最上面 */
+  var recent = [], seen = {};
+  for (var i = S.entries.length - 1; i >= 0 && recent.length < 3; i--){
+    var pe = S.entries[i];
+    if (seen[pe.presetId]) continue;
+    var rp = presetById(pe.presetId);
+    if (!rp) continue;
+    seen[pe.presetId] = 1; recent.push(rp);
+  }
+  if (recent.length){
+    html += '<div class="grp"><div class="grp-hd">最近</div><div class="chips">' +
+      recent.map(function(p){
+        var dis = !canStart(p, st, s);
+        return '<button class="chip' + (d.presetId === p.id ? ' on' : '') + '"' + (dis ? ' disabled' : '') +
+          ' data-act="pick-preset" data-id="' + p.id + '">' +
+          '<span>' + esc(p.name) + '</span>' +
+          '<em>' + (p.column === 'white' ? '不计入' : coefLine(p)) + '</em>' +
+        '</button>';
+      }).join('') + '</div></div>';
+  }
+
+  ['high','low','white'].forEach(function(col){
+    var ps = S.presets.filter(function(p){ return p.column === col; });
+    if (!ps.length) return;
+    var tag = '';
+    if (col === 'white') tag = '<span class="tag" style="color:var(--ink3)">不计入任何额度</span>';
+    else if (st.timeLeft <= 0) tag = '<span class="tag">时间用尽</span>';
+    else if (col === 'high' && (s.ev || s.av)) tag = '<span class="tag">已触线 · 不可开</span>';
+    html += '<div class="grp"><div class="grp-hd">' + colLabel(col) + tag + '</div><div class="chips">';
+    ps.forEach(function(p){
+      var dis = !canStart(p, st, s);
+      html += '<button class="chip' + (d.presetId === p.id ? ' on' : '') + '"' + (dis ? ' disabled' : '') +
+        ' data-act="pick-preset" data-id="' + p.id + '">' +
+        '<span>' + esc(p.name) + '</span>' +
+        '<em>' + (col === 'white' ? '—' : coefLine(p)) + (p.naturalEnd ? '' : ' · 无终点') + '</em>' +
+      '</button>';
+    });
+    html += '</div></div>';
+  });
+
+  var sel = d.presetId ? presetById(d.presetId) : null;
+  if (!sel){
+    html += '<div class="pre">先选一项。<br><span class="mute">选完只确认一次，玩中不用再回来。</span></div>';
+    return sheetWrap('登记一场', html);
+  }
+
+  html += '<div class="subhd">时长</div>' +
+    '<div class="step">' +
+      '<button data-act="minus">−</button>' +
+      '<div class="val">' + d.minutes + '<small>分</small></div>' +
+      '<button data-act="plus">＋</button>' +
+    '</div>' +
+    '<div class="presets">' +
+      [15,30,45,60,90,120].map(function(m){
+        return '<button class="mini' + (d.minutes===m?' on':'') + '" data-act="set-min" data-v="' + m + '">' + m + '</button>';
+      }).join('') +
+    '</div>';
+
+  if (sel.column !== 'white' && !sel.naturalEnd && sel.column === 'low'){
+    html += '<div class="subhd">外置停点（开局前写下，登记后不再改）</div>' +
+      '<input class="txtin" id="stopInput" type="text" value="' + esc(d.stopPoint) + '" data-act="stop-input">' +
+      '<div class="note">停在你自己写的这句话上，不靠当场判断。</div>';
+  }
+  if (sel.column !== 'white' && !sel.naturalEnd && sel.column === 'high'){
+    html += '<div class="note" style="margin-top:12px">无自然终点（信息流类）：到线即绑锁屏。</div>';
+  }
+
+  /* 预估扣减 */
+  var pre;
+  if (sel.column === 'white'){
+    pre = '<div class="pre">白名单：<b>' + d.minutes + ' 分</b> 记入当天归档，<b>不扣</b>时间 / 精力 / 注意力。</div>';
+  } else {
+    var pt = st.time + d.minutes;
+    var pe = st.energy + d.minutes * sel.energy;
+    var pa = st.attention + d.minutes * sel.attention;
+    var limT = st.snap.limitMin - st.rTime;
+    var limE = st.snap.energyThr - st.rEnergy;
+    var limA = st.snap.attentionThr - st.rAttention;
+    var hits = [];
+    if (pt >= limT) hits.push('时间');
+    if (pe >= limE) hits.push('精力');
+    if (pa >= limA) hits.push('注意力');
+    pre = '<div class="pre">' +
+      '本次消耗 时间 <b>' + d.minutes + '</b> 分 · 精力 <b>' + fmtPts(d.minutes*sel.energy) + '</b> 点 · 注意力 <b>' + fmtPts(d.minutes*sel.attention) + '</b> 点<br>' +
+      '登记后 时间 <b>' + Math.round(pt) + '</b> / ' + Math.round(limT) + ' · 精力 <b>' + fmtPts(pe) + '</b> / ' + fmtPts(limE) + ' · 注意力 <b>' + fmtPts(pa) + '</b> / ' + fmtPts(limA) +
+      (hits.length ? '<br><span class="warn">登记后即触线（' + hits.join('、') + '）</span>' : '') +
+      ((hits.length && !sel.naturalEnd && sel.column === 'high') ? '<br><span class="warn">这一项没有自然终点：到线即锁屏</span>' : '') +
+      '</div>';
+  }
+
+  var needStop = (sel.column === 'low' && !sel.naturalEnd) && !String(d.stopPoint).trim();
+  html += pre +
+    '<button class="primary" data-act="confirm-register"' + (needStop ? ' disabled' : '') + '>登记</button>' +
+    '<div class="note">登记完就关掉。玩中不回看、玩完不补记。</div>';
+
+  return sheetWrap('登记一场', html);
+}
+function sheetBlocks(){
+  var t = todayKey();
+  var list = S.blocks.slice().sort(function(a,b){
+    return String(b.reserveDate + b.start).localeCompare(String(a.reserveDate + a.start));
+  });
+  var body = '';
+  if (!list.length){
+    body = '<div class="emptynote">还没有冻结块。</div>';
+  } else {
+    body = list.map(function(b){
+      var canStart = b.status === 'reserved' && b.reserveDate === t;
+      var canNoShow = b.status === 'reserved' && b.reserveDate <= t;
+      var canCancel = b.status === 'reserved' && b.reserveDate > t;
+      return '<div class="blockline" style="display:block">' +
+        '<div style="display:flex;justify-content:space-between;gap:10px;align-items:baseline">' +
+          '<span class="bl">' + blockWhen(b) + ' · ' + esc(b.presetName) + '</span>' +
+          '<span class="m" style="font-size:11.5px;color:var(--ink3)">' + blockStatusText(b) + '</span>' +
+        '</div>' +
+        '<div class="bs">' + b.plannedMinutes + ' 分 · 精力 ' + fmtPts(b.plannedMinutes*b.energyCoef) + ' · 注意力 ' + fmtPts(b.plannedMinutes*b.attentionCoef) +
+          ' · 兜底：' + (b.noshowPolicy === 'postpone' ? '顺延' : '归零') + (b.reserveDate ? ' · 绑 ' + b.reserveDate : '') + '</div>' +
+        ((canStart || canNoShow || canCancel)
+          ? '<div class="row">' +
+              (canStart ? '<button class="primary" style="padding:11px" data-act="block-start" data-id="' + b.id + '">开始这一场</button>' : '') +
+              (canNoShow ? '<button class="ghost" style="margin-top:0" data-act="block-noshow" data-id="' + b.id + '">爽约</button>' : '') +
+              (canCancel ? '<button class="ghost" style="margin-top:0" data-act="block-cancel" data-id="' + b.id + '">取消预约</button>' : '') +
+            '</div>'
+          : '') +
+      '</div>';
+    }).join('');
+  }
+  return sheetWrap('冻结块', body + '<button class="ghost" data-act="open-reserve">新建预约</button>');
+}
+
+/* ---- 修正单条登记 ---- */
+function sheetEntry(){
+  var c = ui.sheet.ctx;
+  var e = findEntry(c.id);
+  if (!e || e.deleted) return sheetWrap('修正这一条', '<div class="emptynote">这条已经被删除了。</div>');
+
+  var has = presetById(e.presetId);
+  var opts = '';
+  if (!has) opts += '<option value="' + e.presetId + '" selected>' + esc(e.name) + '（已从预设表移除）</option>';
+  opts += S.presets.map(function(p){
+    return '<option value="' + p.id + '"' + (p.id === e.presetId ? ' selected' : '') + '>' +
+      esc(p.name) + '　·　' + colLabel(p.column) + '</option>';
+  }).join('');
+
+  var t = new Date(e.ts);
+  var timeVal = pad(t.getHours()) + ':' + pad(t.getMinutes());
+  var p = has || null;
+  var needStop = !!(p && p.column === 'low' && !p.naturalEnd);
+
+  var revs = e.revs || [];
+  var orig = revs.length ? revs[0].before : null;
+  var revHTML = '';
+  if (orig){
+    revHTML = '<div class="revbox"><span class="lbl">原始值</span>　' + esc(orig.name) + ' · ' + orig.minutes + ' 分 · ' +
+      hhmm(orig.ts) + ' · 精' + fmtPts(orig.energyCoef) + ' 注' + fmtPts(orig.attentionCoef) +
+      (revs.length > 1 ? '（改过 ' + revs.length + ' 次）' : '') + '</div>';
+  }
+
+  var body = '' +
+    '<div class="subhd">活动</div>' +
+    '<select class="txtin" id="ed-sel">' + opts + '</select>' +
+    '<div class="row" style="align-items:flex-end">' +
+      '<div style="flex:1"><div class="subhd">时长（分钟）</div>' +
+        '<input class="txtin" id="ed-min" type="number" inputmode="numeric" min="1" max="600" value="' + e.minutes + '"></div>' +
+      '<div style="flex:1"><div class="subhd">开始时刻</div>' +
+        '<input class="txtin" id="ed-time" type="time" value="' + timeVal + '"></div>' +
+    '</div>' +
+    '<div id="ed-stopwrap" style="' + (needStop ? '' : 'display:none') + '">' +
+      '<div class="subhd">外置停点</div>' +
+      '<input class="txtin" id="ed-stop" type="text" value="' + esc(e.stopPoint || '只查完这一个问题') + '">' +
+    '</div>' +
+    '<div class="pre" id="ed-pre"></div>' +
+    revHTML +
+    '<button class="primary" data-act="entry-save">保存修改</button>' +
+    '<button class="ghost danger" data-act="entry-del" style="margin-top:10px">删除这一条</button>' +
+    '<div class="note">改完只动这一条，不动阈值和其他记录。删除后可以在当天的「已删除」里恢复。</div>';
+
+  return sheetWrap('修正这一条', body);
+}
+function refreshEditPreview(){
+  var sel = document.getElementById('ed-sel');
+  var minEl = document.getElementById('ed-min');
+  var pre = document.getElementById('ed-pre');
+  var wrap = document.getElementById('ed-stopwrap');
+  if (!sel || !pre) return;
+  var p = presetById(sel.value);
+  var mins = parseFloat(minEl && minEl.value);
+  if (wrap){
+    var need = !!(p && p.column === 'low' && !p.naturalEnd);
+    wrap.style.display = need ? '' : 'none';
+  }
+  if (!p){ pre.innerHTML = '<span class="mute">这一项已从预设表移除，只能改时长或删除。</span>'; return; }
+  if (!(mins > 0)){ pre.innerHTML = '<span class="mute">填一个大于 0 的分钟数。</span>'; return; }
+  if (p.column === 'white'){
+    pre.innerHTML = '白名单：<b>' + Math.round(mins) + '</b> 分只进归档，<b>不扣</b>任何额度。';
+    return;
+  }
+  pre.innerHTML = '会变成：时间 <b>' + Math.round(mins) + '</b> 分 · 精力 <b>' + fmtPts(mins * p.energy) +
+    '</b> 点 · 注意力 <b>' + fmtPts(mins * p.attention) + '</b> 点';
+}
+function saveEntryEdit(){
+  var c = ui.sheet && ui.sheet.ctx;
+  if (!c) return;
+  var e = findEntry(c.id);
+  if (!e || e.deleted) return;
+  var sel = document.getElementById('ed-sel');
+  var minEl = document.getElementById('ed-min');
+  var timeEl = document.getElementById('ed-time');
+  var stopEl = document.getElementById('ed-stop');
+
+  var mins = clampNum(minEl && minEl.value, 1, 600, e.minutes);
+  if (!(mins > 0)){ toast('时长不对'); return; }
+
+  var ts = e.ts;
+  var tv = (timeEl && timeEl.value) || '';
+  var m = /^(\d{1,2}):(\d{2})$/.exec(tv);
+  if (m){
+    var hh = Number(m[1]), mi = Number(m[2]);
+    var d = parseDate(e.dateKey);
+    if (hh < RESET_HOUR) d.setDate(d.getDate() + 1);   /* 结算点前算前一天的夜里 */
+    ts = new Date(d.getFullYear(), d.getMonth(), d.getDate(), hh, mi, 0, 0).getTime();
+  }
+
+  e.revs = e.revs || [];
+  var before = snapshotOf(e);
+  var p = presetById(sel && sel.value);
+  if (p){
+    e.presetId = p.id;
+    e.name = p.name;
+    e.column = p.column;
+    e.energyCoef = p.column === 'white' ? 0 : (Number(p.energy) || 0);
+    e.attentionCoef = p.column === 'white' ? 0 : (Number(p.attention) || 0);
+    e.naturalEnd = !!p.naturalEnd;
+    e.lockScreen = (p.column === 'high' && !p.naturalEnd);
+  }
+  e.minutes = Math.round(mins);
+  e.ts = ts;
+
+  var lowNoEnd = (e.column === 'low' && !e.naturalEnd);
+  e.stopPoint = lowNoEnd ? String((stopEl && stopEl.value) || '').trim() : '';
+
+  var moved = (before.name !== e.name || before.presetId !== e.presetId ||
+    before.minutes !== e.minutes || before.ts !== e.ts ||
+    (before.stopPoint || '') !== (e.stopPoint || ''));
+  if (!moved){
+    ui.sheet = null; render();
+    toast('没有改动');
+    return;
+  }
+  e.revs.push({at: Date.now(), before: before});
+
+  ui.sheet = null;
+  save(); render();
+  toast('已修改（原始值已保留）');
+}
+function deleteEntry(id){
+  var e = findEntry(id);
+  if (!e) return;
+  e.deleted = true;
+  e.deletedAt = Date.now();
+  ui.sheet = null;
+  save(); render();
+  toast('已删除，可在当天的「已删除」里恢复');
+}
+function restoreEntry(id){
+  var e = findEntry(id);
+  if (!e) return;
+  e.deleted = false;
+  save(); render();
+  toast('已恢复');
+}
+
+/* ---- 系数计算器：阈值 ÷ 整日等效分钟 ---- */function calcCoef(kind, mins){
+  var thr = Number(kind === 'e' ? S.config.energyThr : S.config.attentionThr) || 0;
+  var m = parseFloat(mins);
+  if (!(m > 0) || thr <= 0) return {text:'不改', warn:false};
+  var raw = thr / m;
+  return {text: fmtPts(clampNum(raw, 0, 9, 1)) + (raw > 9.05 ? '（上限截断）' : ''), warn: raw > 9.05};
+}
+/* 系数是什么意思：两处计算入口共用 */
+function coefHelpHTML(id){
+  return '' +
+    '<button class="helplink" data-act="toggle-help" data-target="' + id + '">系数是什么意思？</button>' +
+    '<div class="helpbox" id="' + id + '" hidden>' +
+      '<p>把「系数」当成一个倍率，不是分数，也不是评价。</p>' +
+      '<p><b>系数 2</b> 的意思是：这一项每过 1 分钟，扣 2 点。登记 60 分钟就是 120 点。</p>' +
+      '<p>不同的事每分钟扣得不一样：刷手机 30 分钟和散步 30 分钟，占的不是同一份额度，所以给不同的倍率。</p>' +
+      '<p>系数是反推出来的：<b>系数 = 阈值 ÷ 整天只做这一项的分钟数</b>。阈值 200、你填 100 分钟 → 系数 2；填 400 分钟 → 系数 0.5。</p>' +
+      '<p>它回答的是「同样一小时，这件事到底有多耗」。所以别人的系数对你没意义——它取决于你自己的阈值。</p>' +
+      '<p>白名单（睡眠、散步这类）不参与计算，系数填什么都无所谓。</p>' +
+    '</div>';
+}
+function sheetCalc(){
+  var eT = Number(S.config.energyThr) || 0;
+  var aT = Number(S.config.attentionThr) || 0;
+
+  function line(p, kind, label, thr, coef){
+    var mins = (coef > 0 && thr > 0) ? (Math.round(thr / coef * 10) / 10) : '';
+    var r = calcCoef(kind, mins);
+    return '<div class="calc-line">' +
+      '<span>' + label + '</span>' +
+      '<input type="number" inputmode="decimal" min="1" step="1" value="' + mins + '"' +
+        ' id="calc-' + p.id + '-' + kind + '" data-calc="' + p.id + '" data-kind="' + kind + '">' +
+      '<i>分</i>' +
+      '<b id="out-' + p.id + '-' + kind + '" class="' + (r.warn ? 'warn' : '') + '">→ ' + r.text + '</b>' +
+    '</div>';
+  }
+
+  var rows = S.presets.filter(function(p){ return p.column !== 'white'; }).map(function(p){
+    return '<div class="calc-row">' +
+      '<div class="calc-name">' + esc(p.name) + '<span>' + colLabel(p.column) + '</span></div>' +
+      line(p, 'e', '精力', eT, p.energy) +
+      line(p, 'a', '注意力', aT, p.attention) +
+    '</div>';
+  }).join('');
+
+  var body = '' +
+    '<div class="calc-rule">' +
+      '规则：<b>系数 = 阈值 ÷ 等效分钟</b><br>' +
+      '当前阈值 精力 <b>' + fmtPts(eT) + '</b> · 注意力 <b>' + fmtPts(aT) + '</b> <span class="mute">（在设置里改，这里跟着变）</span><br>' +
+      '「等效分钟」= 假定整天只做这一项，多少分钟后这条线见底。留空 = 这一项不改。' +
+    '</div>' +
+    coefHelpHTML('calcHelpBox') +
+    rows +
+    '<div class="note">白名单不计入任何额度，已跳过。系数上限 9。</div>' +
+    '<button class="primary" data-act="calc-apply">写入这些系数</button>' +
+    '<div class="note">只改系数，不动阈值，也不动已经登记过的历史。</div>';
+
+  return sheetWrap('按等效分钟算系数', body);
+}
+function applyCalc(){
+  var changed = 0;
+  S.presets.forEach(function(p){
+    if (p.column === 'white') return;
+    [['e','energy','energyThr'], ['a','attention','attentionThr']].forEach(function(t){
+      var inp = document.getElementById('calc-' + p.id + '-' + t[0]);
+      if (!inp) return;
+      var m = parseFloat(inp.value);
+      if (!(m > 0)) return;
+      var thr = Number(S.config[t[2]]) || 0;
+      if (thr <= 0) return;
+      p[t[1]] = clampNum(thr / m, 0, 9, 1);
+      changed++;
+    });
+  });
+  ui.sheet = null;
+  save(); render();
+  toast(changed ? ('已写入 ' + changed + ' 个系数') : '没有可写入的项');
+}
+function sheetReserve(){
+  var d = ui.sheet.ctx;
+  var c = S.config;
+  if (!d.date) d.date = c.nextWindow.date || todayKey();
+  if (!d.start) d.start = c.nextWindow.start || '20:00';
+  if (!d.end) d.end = c.nextWindow.end || '22:00';
+  if (!d.minutes) d.minutes = diffMin(d.start, d.end) || 90;
+  if (!d.presetId){
+    var g = S.presets.filter(function(p){ return p.column === 'high'; });
+    d.presetId = g.length ? g[0].id : null;
+  }
+  if (!d.policy) d.policy = c.noshowPolicy || 'postpone';
+
+  var opts = S.presets.filter(function(p){ return p.column === 'high'; }).map(function(p){
+    return '<option value="' + p.id + '"' + (d.presetId===p.id?' selected':'') + '>' + esc(p.name) + '</option>';
+  }).join('');
+
+  var st = dayStats(d.date);
+  var sel = presetById(d.presetId);
+  var pre = '';
+  if (sel){
+    var pt = st.time + st.rTime + d.minutes;
+    var pe = st.energy + st.rEnergy + d.minutes * sel.energy;
+    var pa = st.attention + st.rAttention + d.minutes * sel.attention;
+    var hits = [];
+    if (pt >= st.snap.limitMin) hits.push('时间上限');
+    if (pe >= st.snap.energyThr) hits.push('精力阈值');
+    if (pa >= st.snap.attentionThr) hits.push('注意力阈值');
+    pre = '<div class="pre">' +
+      '该日已登记 <b>' + st.time + '</b> 分' + (st.rTime ? '（另预留 <b>' + st.rTime + '</b> 分）' : '') + '<br>' +
+      '加上这一场：时间 <b>' + Math.round(pt) + '</b> / ' + Math.round(st.snap.limitMin) + ' · 精力 <b>' + fmtPts(pe) + '</b> / ' + fmtPts(st.snap.energyThr) + ' · 注意力 <b>' + fmtPts(pa) + '</b> / ' + fmtPts(st.snap.attentionThr) +
+      (hits.length
+        ? '<br><span class="warn">会撞破：' + hits.join('、') + '</span>'
+        : '<br><span class="mute">不吃紧</span>') +
+      '<br><span class="mute">这一场只划入 ' + d.date + ' 的额度，不占其他日期，也不要求今天先省着花。</span>' +
+    '</div>';
+  }
+
+  var body = '' +
+    '<div class="subhd">预约日期</div>' +
+    '<input class="txtin" type="date" value="' + d.date + '" data-set="rs-date">' +
+    '<div class="subhd">时段</div>' +
+    '<div class="row">' +
+      '<input class="txtin" type="time" style="flex:1" value="' + d.start + '" data-set="rs-start">' +
+      '<input class="txtin" type="time" style="flex:1" value="' + d.end + '" data-set="rs-end">' +
+    '</div>' +
+    '<div class="subhd">活动</div>' +
+    '<select class="txtin" data-set="rs-preset">' + opts + '</select>' +
+    '<div class="subhd">时长（分钟）</div>' +
+    '<input class="txtin" type="number" inputmode="numeric" min="1" value="' + d.minutes + '" data-set="rs-minutes">' +
+    '<div class="subhd">爽约兜底（写死在这一次预约里，之后不再选）</div>' +
+    '<div class="presets">' +
+      '<button class="mini' + (d.policy==='postpone'?' on':'') + '" data-act="rs-policy" data-v="postpone">顺延到下次窗口</button>' +
+      '<button class="mini' + (d.policy==='zero'?' on':'') + '" data-act="rs-policy" data-v="zero">直接归零</button>' +
+    '</div>' +
+    '<div class="note">两种都不会解冻回自由池。默认取设置里的默认值，可在这里改一次。</div>' +
+    pre +
+    '<button class="primary" data-act="confirm-reserve">锁进日历</button>' +
+    '<div class="note">预留时已经预判过是否撞破当日双阈值；此后不每天重判。</div>';
+
+  return sheetWrap('预约联机', body);
+}
+
+/* ================= 行为 ================= */
+function goto(view){ ui.view = view; ui.sheet = null; render(); window.scrollTo(0,0); }
+function render(){
+  var root = document.getElementById('root');
+  if (!S.config.set && ui.view === 'home') ui.view = 'setup';
+  if (todayKey() !== ui.waterDay){ ui.waterDay = todayKey(); ui.waterPct = {}; }
+  if (ui.view === 'lang') root.innerHTML = viewLang();
+  else if (ui.view === 'setup') root.innerHTML = viewSetup();
+  else if (ui.view === 'review') root.innerHTML = viewReview();
+  else if (ui.view === 'settings') root.innerHTML = viewSettings();
+  else root.innerHTML = viewHome();
+  applyLang(root);
+  if (ui.view === 'home') requestAnimationFrame(paintWater);
+  syncSheet();
+}
+function syncSheet(){
+  var l = document.getElementById('layer');
+  if (!ui.sheet){ l.innerHTML = ''; return; }
+
+  /* 已经有一层弹层时，这次只是内容刷新：不重播动画，也不把滚动位置甩回顶部 */
+  var prev = l.querySelector('.sheet');
+  var keepTop = 0;
+  if (prev){
+    var bd0 = prev.querySelector('.sheet-bd');
+    if (bd0) keepTop = bd0.scrollTop;
+  }
+
+  var body = '';
+  if (ui.sheet.type === 'register') body = sheetRegister();
+  else if (ui.sheet.type === 'blocks') body = sheetBlocks();
+  else if (ui.sheet.type === 'reserve') body = sheetReserve();
+  else if (ui.sheet.type === 'calc') body = sheetCalc();
+  else if (ui.sheet.type === 'entry') body = sheetEntry();
+  else if (ui.sheet.type === 'update') body = sheetUpdate();
+  else if (ui.sheet.type === 'import') body = sheetImport();
+  else if (ui.sheet.type === 'newpreset') body = sheetNewPreset();
+  l.innerHTML = '<div class="scrim" data-act="close-sheet"></div>' +
+                '<div class="sheet-wrap"><div class="sheet' + (prev ? ' still' : '') + '">' + body + '</div></div>';
+  if (prev && keepTop){
+    var bd1 = l.querySelector('.sheet-bd');
+    if (bd1) bd1.scrollTop = keepTop;
+  }
+  applyLang(l);
+  if (ui.sheet && ui.sheet.type === 'entry') refreshEditPreview();
+  if (ui.sheet && ui.sheet.type === 'newpreset') refreshNewPreset();
+}
+function toast(msg){
+  var t = document.getElementById('toast');
+  t.textContent = tr(msg);
+  t.hidden = false;
+  clearTimeout(toast._tm);
+  toast._tm = setTimeout(function(){ t.hidden = true; }, 2300);
+}
+
+/* ---- 登记 ---- */
+function confirmRegister(){
+  var d = ui.sheet && ui.sheet.ctx;
+  if (!d || !d.presetId) return;
+  var p = presetById(d.presetId);
+  if (!p) return;
+  if (p.column === 'low' && !p.naturalEnd && !String(d.stopPoint).trim()){
+    toast('先写下外置停点');
+    return;
+  }
+  var st = dayStats(todayKey());
+  var s = statusOf(st);
+  if (!canStart(p, st, s)){
+    toast('这一项现在不可开');
+    return;
+  }
+  addEntry({
+    presetId: p.id,
+    minutes: d.minutes,
+    kind: 'normal',
+    stopPoint: (p.column === 'low' && !p.naturalEnd) ? String(d.stopPoint).trim() : ''
+  });
+  ui.sheet = null;
+  render();
+  toast('已登记：' + p.name + ' ' + d.minutes + ' 分');
+}
+
+/* ---- 预约 ---- */
+function confirmReserve(){
+  var d = ui.sheet && ui.sheet.ctx;
+  if (!d) return;
+  var p = presetById(d.presetId);
+  if (!p){ toast('没有可预约的活动'); return; }
+  if (!d.date){ toast('先选日期'); return; }
+  if (!d.minutes || d.minutes < 1){ toast('时长不对'); return; }
+  var b = {
+    id: uid(),
+    createdAt: Date.now(),
+    reserveDate: d.date,
+    start: d.start,
+    end: d.end,
+    presetId: p.id,
+    presetName: p.name,
+    plannedMinutes: Math.round(d.minutes),
+    energyCoef: p.energy,
+    attentionCoef: p.attention,
+    noshowPolicy: d.policy,
+    status: 'reserved'
+  };
+  S.blocks.push(b);
+  save();
+  ui.sheet = null;
+  render();
+  toast('已锁进 ' + d.date + ' ' + d.start + '–' + d.end);
+}
+function applyNoShow(b){
+  if (!b || b.status !== 'reserved') return;
+  if (b.noshowPolicy === 'zero'){
+    b.status = 'noshowZero';
+    save();
+    toast('已归零：这一场的额度不回到自由池');
+  } else {
+    var nw = S.config.nextWindow;
+    b.status = 'noshowPostponed';
+    var nb = {
+      id: uid(), createdAt: Date.now(),
+      reserveDate: nw && nw.date ? nw.date : '',
+      start: (nw && nw.start) || b.start,
+      end: (nw && nw.end) || b.end,
+      presetId: b.presetId, presetName: b.presetName,
+      plannedMinutes: b.plannedMinutes,
+      energyCoef: b.energyCoef, attentionCoef: b.attentionCoef,
+      noshowPolicy: b.noshowPolicy,
+      status: (nw && nw.date) ? 'reserved' : 'pendingWindow',
+      fromId: b.id
+    };
+    S.blocks.push(nb);
+    save();
+    toast(nb.status === 'reserved'
+      ? ('已顺延到 ' + nb.reserveDate + ' ' + nb.start + '–' + nb.end)
+      : '已顺延：下次窗口还没填，去设置里填一次');
+  }
+}
+
+/* ---- 导出 / 清空 / 撤销 ---- */
+function exportJSON(){
+  var payload = {
+    app: '刻度',
+    exportedAt: new Date().toISOString(),
+    timezone: (new Date()).getTimezoneOffset(),
+    state: S
+  };
+  var text = JSON.stringify(payload, null, 2);
+  var name = '刻度-' + todayKey() + '.json';
+
+  /* 装在 APK 里时，交给原生层写进系统「下载」目录 */
+  try {
+    if (window.AndroidApp && window.AndroidApp.saveText){
+      var r = window.AndroidApp.saveText(name, text);
+      if (r && r.indexOf('ERR') !== 0){ toast('已保存到 ' + r); return; }
+      toast('保存失败：' + (r || ''));
+      return;
+    }
+  } catch (e) { /* 落到下面的浏览器下载 */ }
+
+  var blob = new Blob([text], {type:'application/json'});
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(function(){ URL.revokeObjectURL(url); }, 5000);
+  toast('已导出');
+}
+/* ---- 检查更新 ---- */
+function cmpVer(a, b){
+  var x = String(a).split('.'), y = String(b).split('.');
+  for (var i=0;i<3;i++){
+    var p = Number(x[i] || 0), q = Number(y[i] || 0);
+    if (p > q) return 1;
+    if (p < q) return -1;
+  }
+  return 0;
+}
+function canInstall(){
+  return !!(window.AndroidApp && window.AndroidApp.installApk);
+}
+function checkUpdate(){
+  var native = canInstall();
+  toast('正在检查…');
+  fetch('https://api.github.com/repos/' + REPO + '/releases/latest', {cache:'no-store'})
+    .then(function(r){ return r.json(); })
+    .then(function(j){
+      var tag = String((j && j.tag_name) || '').replace(/^v/i, '');
+      if (!tag){ toast('没有找到发布版本'); return; }
+      if (cmpVer(tag, APP_VERSION) <= 0){ toast('已是最新版本 v' + APP_VERSION); return; }
+      var asset = (j.assets || []).filter(function(a){ return /\.apk$/i.test(a.name); })[0];
+      ui.sheet = {type:'update', ctx:{
+        tag: tag,
+        url: j.html_url || ('https://github.com/' + REPO + '/releases'),
+        apk: native ? (asset ? asset.browser_download_url
+                              : ('https://github.com/' + REPO + '/releases/latest/download/scale.apk')) : '',
+        size: asset && asset.size ? Math.round(asset.size / 1024) : 0
+      }};
+      syncSheet();
+    })
+    .catch(function(){
+      if (native){
+        ui.sheet = {type:'update', ctx:{tag:'', url:'https://github.com/' + REPO + '/releases/latest',
+          apk:'https://github.com/' + REPO + '/releases/latest/download/scale.apk', size:0, offline:true}};
+        syncSheet();
+      } else {
+        toast('检查失败：可能没有联网');
+      }
+    });
+}
+function sheetUpdate(){
+  var c = ui.sheet.ctx;
+  if (!c.tag){
+    return sheetWrap('检查更新',
+      '<div class="pre">没查到版本号，可能没联网。<br>可以直接下载最新安装包试试，覆盖安装不会丢数据。</div>' +
+      '<button class="primary" data-act="download-apk">直接下载最新版</button>' +
+      '<button class="ghost" data-act="open-release">去 Release 页面看看</button>');
+  }
+  var sizeTxt = c.size ? ('约 ' + c.size + ' KB') : '';
+  var head = c.offline ? '可能是新版本' : ('发现新版本 v' + c.tag);
+  var body = '<div class="pre">当前版本 <b>v' + APP_VERSION + '</b><br>' +
+    (c.offline ? ('最新版本 <b>未知</b>') : ('最新版本 <b>v' + c.tag + '</b>' + (sizeTxt ? ' · ' + sizeTxt : ''))) +
+    '</div>';
+  if (c.apk){
+    body += '<button class="primary" data-act="download-apk">下载并安装</button>' +
+            '<button class="ghost" data-act="open-release">去 Release 页面</button>' +
+            '<div class="note">下载在后台进行，完成后系统会弹出安装器。覆盖安装，数据不会丢。' +
+            '第一次可能要求你允许「刻度」安装未知应用。</div>';
+  } else {
+    body += '<button class="primary" data-act="open-release">打开发布页</button>' +
+            '<div class="note">网页版刷新即可拿到新版；APK 去 Release 下载覆盖安装，数据会保留。</div>';
+  }
+  return sheetWrap(head, body);
+}
+/* ---- 导入 JSON ---- */
+function sheetImport(){
+  var c = ui.sheet.ctx;
+  if (!c.data){
+    return sheetWrap('导入 JSON',
+      '<div class="note" style="margin-top:0">选一份之前「导出 JSON」存下的文件。导入前会先列清单，你确认了才写进去。</div>' +
+      '<input class="txtin" type="file" id="importFile" accept=".json,application/json" style="margin-top:12px;padding:9px">' +
+      '<div class="note">数据只在这台设备上处理，不会上传。</div>');
+  }
+  var st = c.data;
+  var nE = (st.entries || []).length;
+  var nB = (st.blocks || []).length;
+  var nP = (st.presets || []).length;
+  var keys = (st.entries || []).map(function(e){ return e.dateKey; }).filter(Boolean).sort();
+  var range = keys.length ? (keys[0] + ' → ' + keys[keys.length-1]) : '';
+  var when = '';
+  if (c.exportedAt){
+    var d = new Date(c.exportedAt);
+    if (!isNaN(d.getTime())){
+      when = d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+    }
+  }
+  return sheetWrap('导入 JSON',
+    '<div class="pre">文件 <b>' + esc(c.name || '') + '</b><br>' +
+      '登记 <b>' + nE + '</b> 条 · 冻结块 <b>' + nB + '</b> 个 · 预设 <b>' + nP + '</b> 项' +
+      (when ? '<br>导出时间 ' + when : '') +
+      (range ? '<br>记录范围 ' + range : '') +
+    '</div>' +
+    '<div class="note" style="margin-top:12px">合并：只补本机没有的记录（按 id 判重），当前刻度和预设不动。<br>覆盖：用文件里的刻度、预设、全部历史替换本机数据（界面语言保持不变）。</div>' +
+    '<button class="primary" data-act="import-merge">合并导入</button>' +
+    '<button class="ghost danger" data-act="import-replace">覆盖导入</button>' +
+    '<div class="note">导入后立即按新数据刷新。</div>');
+}
+function doImport(mode){
+  var c = ui.sheet && ui.sheet.ctx;
+  if (!c || !c.data) return;
+  var inc = c.data;
+  if (mode === 'replace'){
+    var keepLang = S.config.lang;
+    S.v = inc.v || 1;
+    S.config = Object.assign(seedState().config, inc.config || {});
+    S.config.lang = keepLang;
+    S.config.set = true;
+    if (Array.isArray(inc.presets) && inc.presets.length) S.presets = inc.presets;
+    S.entries = Array.isArray(inc.entries) ? inc.entries : [];
+    S.blocks = Array.isArray(inc.blocks) ? inc.blocks : [];
+    S.days = (inc.days && typeof inc.days === 'object') ? inc.days : {};
+    ui.sheet = null; save(); render();
+    toast('已覆盖：' + S.entries.length + ' 条登记');
+    return;
+  }
+  var ids = {}, bids = {};
+  S.entries.forEach(function(e){ ids[e.id] = 1; });
+  S.blocks.forEach(function(b){ bids[b.id] = 1; });
+  var addE = 0, addB = 0;
+  (inc.entries || []).forEach(function(e){
+    if (!e || !e.id || ids[e.id]) return;
+    ids[e.id] = 1; S.entries.push(e); addE++;
+  });
+  (inc.blocks || []).forEach(function(b){
+    if (!b || !b.id || bids[b.id]) return;
+    bids[b.id] = 1; S.blocks.push(b); addB++;
+  });
+  if (inc.days) Object.keys(inc.days).forEach(function(k){ if (!S.days[k]) S.days[k] = inc.days[k]; });
+  ui.sheet = null; save(); render();
+  toast('已合并：新增 ' + addE + ' 条登记' + (addB ? '、' + addB + ' 个冻结块' : ''));
+}
+
+/* ---- 新增事件：当场按等效分钟算这一项的系数 ---- */
+function sheetNewPreset(){
+  var c = ui.sheet.ctx;
+  var eT = Number(S.config.energyThr) || 0;
+  var aT = Number(S.config.attentionThr) || 0;
+  var white = (c.column === 'white');
+
+  var cols = ['high','low','white'].map(function(v){
+    return '<button class="' + (c.column === v ? 'on' : '') + '" data-act="np-col" data-v="' + v + '">' +
+      colLabel(v) + '</button>';
+  }).join('');
+
+  var coefPart;
+  if (white){
+    coefPart = '<div class="note" style="margin-top:12px">白名单不计入任何额度，不用填系数（睡眠、散步这类）。</div>';
+  } else {
+    coefPart =
+      '<div class="calc-line"><span>精力</span>' +
+        '<input type="number" inputmode="numeric" min="1" max="1440" value="' + c.eMin + '" id="np-emin">' +
+        '<i>分钟</i><b id="np-ecoef">→ ' + fmtPts(c.eCoef) + '</b></div>' +
+      '<div class="calc-line"><span>注意力</span>' +
+        '<input type="number" inputmode="numeric" min="1" max="1440" value="' + c.aMin + '" id="np-amin">' +
+        '<i>分钟</i><b id="np-acoef">→ ' + fmtPts(c.aCoef) + '</b></div>' +
+      '<div class="pre" id="np-pre" style="margin-top:12px"></div>';
+  }
+
+  var body = '' +
+    '<div class="subhd">名称</div>' +
+    '<input class="txtin" id="np-name" type="text" value="' + esc(c.name) + '">' +
+    '<div class="subhd">所属列</div>' +
+    '<span class="seg">' + cols + '</span>' +
+    '<div class="subhd">这一项多少分钟见底</div>' +
+    '<div class="calc-rule">「整天只做这一项，多少分钟后这条线见底」——' +
+      '系数 = 阈值 ÷ 这个分钟数（当前精力 ' + fmtPts(eT) + ' / 注意力 ' + fmtPts(aT) + '）。</div>' +
+    coefHelpHTML('npHelpBox') +
+    coefPart +
+    '<div class="subhd">结束方式</div>' +
+    '<span class="seg"><button class="' + (c.naturalEnd ? 'on' : '') + '" data-act="np-end" data-v="1">有终点</button>' +
+    '<button class="' + (!c.naturalEnd ? 'on' : '') + '" data-act="np-end" data-v="0">无终点</button></span>' +
+    '<button class="primary" data-act="np-save" style="margin-top:16px">保存这个事件</button>' +
+    '<div class="note">存好之后会出现在「登记一场」里，也可以再去预设表里改。</div>';
+
+  return sheetWrap('新增事件', body);
+}
+function refreshNewPreset(){
+  var c = ui.sheet && ui.sheet.ctx;
+  if (!c) return;
+  var em = document.getElementById('np-emin');
+  var am = document.getElementById('np-amin');
+  var eo = document.getElementById('np-ecoef');
+  var ao = document.getElementById('np-acoef');
+  var pre = document.getElementById('np-pre');
+  if (!em || !am) return;
+  var eT = Number(S.config.energyThr) || 0;
+  var aT = Number(S.config.attentionThr) || 0;
+  var ev = parseFloat(em.value), av = parseFloat(am.value);
+  var eC = clampNum(ev > 0 ? eT / ev : 1, 0, 9, 1);
+  var aC = clampNum(av > 0 ? aT / av : 1, 0, 9, 1);
+  c.eCoef = eC; c.aCoef = aC;
+  if (eo) eo.textContent = '→ ' + fmtPts(eC);
+  if (ao) ao.textContent = '→ ' + fmtPts(aC);
+  if (pre){
+    pre.innerHTML = '登记 60 分钟 ≈ 精力 <b>' + fmtPts(60 * eC) + '</b> 点 · 注意力 <b>' + fmtPts(60 * aC) + '</b> 点';
+    applyLang(pre);   /* 这段是在翻译之后才生成的，得单独再翻一次 */
+  }
+}
+function saveNewPreset(){
+  var c = ui.sheet && ui.sheet.ctx;
+  if (!c) return;
+  var nameEl = document.getElementById('np-name');
+  var name = String((nameEl && nameEl.value) || '').trim();
+  if (!name){ toast('先给这个事件起个名字'); if (nameEl) nameEl.focus(); return; }
+  var white = (c.column === 'white');
+  var eC = white ? 1 : c.eCoef;
+  var aC = white ? 1 : c.aCoef;
+  S.presets.push({ id: uid(), name: name, column: c.column,
+    energy: eC, attention: aC, naturalEnd: !!c.naturalEnd });
+  ui.sheet = null;
+  save(); render();
+  toast('已新增：' + name);
+}
+
+function undoLast(){
+  if (!S.entries.length){ toast('没有可撤销的登记'); return; }
+  var e = S.entries[S.entries.length-1];
+  S.entries.pop();
+  if (e.blockId){
+    var b = null;
+    for (var i=0;i<S.blocks.length;i++) if (S.blocks[i].id === e.blockId) b = S.blocks[i];
+    if (b) b.status = 'reserved';
+  }
+  save();
+  render();
+  toast('已撤销：' + e.name + ' ' + e.minutes + ' 分');
+}
+function clearHistory(){
+  S.entries = [];
+  S.blocks = [];
+  S.days = {};
+  ui.clearArmed = false;
+  ui.openDay = null;
+  save();
+  render();
+  toast('历史已清空');
+}
+
+/* ================= 拖动柱顶改阈值 ================= */
+var dragState = null;
+document.addEventListener('pointerdown', function(ev){
+  var t = ev.target.closest ? ev.target.closest('.btrack') : null;
+  if (!t || ui.view !== 'home' || ui.sheet) return;
+  var key = t.getAttribute('data-k');
+  var cfg = BAR[key];
+  if (!cfg) return;
+  dragState = {
+    key: key, cfg: cfg,
+    y0: ev.clientY,
+    v0: Number(S.config[cfg.field]) || 0,
+    moved: false,
+    track: t
+  };
+  dragState.ppu = dragPpu(cfg, dragState.v0);
+  t.classList.add('dragging');
+  if (t.setPointerCapture) { try { t.setPointerCapture(ev.pointerId); } catch(e){} }
+  ev.preventDefault();
+}, {passive:false});
+
+document.addEventListener('pointermove', function(ev){
+  if (!dragState) return;
+  var d = dragState, cfg = d.cfg;
+  var dy = d.y0 - ev.clientY;
+  if (!d.moved && Math.abs(dy) < 4) return;
+  d.moved = true;
+  var v = d.v0 + dy / d.ppu;
+  v = Math.round(v / cfg.step) * cfg.step;
+  v = Math.max(cfg.min, Math.min(cfg.max, v));
+  S.config[cfg.field] = v;
+  refreshColumn(d.key, d.ppu);
+  ev.preventDefault();
+}, {passive:false});
+
+function endDrag(){
+  if (!dragState) return;
+  var d = dragState;
+  dragState = null;
+  d.track.classList.remove('dragging');
+  if (!d.moved) return;
+  save();
+  render();
+  toast(d.cfg.label + '阈值改成 ' + fmtThr(Number(S.config[d.cfg.field])) + ' ' + d.cfg.unit);
+}
+document.addEventListener('pointerup', endDrag);
+document.addEventListener('pointercancel', function(){
+  if (!dragState) return;
+  var d = dragState;
+  dragState = null;
+  d.track.classList.remove('dragging');
+  render();
+});
+
+/* ================= 事件 ================= */
+document.addEventListener('click', function(ev){
+  /* 预设表：有/无自然终点 开关 */
+  var tg = ev.target.closest('button[data-pfield="endtoggle"]');
+  if (tg){
+    var pp = presetById(tg.getAttribute('data-pid'));
+    if (pp){ pp.naturalEnd = !pp.naturalEnd; save(); render(); }
+    return;
+  }
+
+  var el = ev.target.closest('[data-act]');
+  if (!el) return;
+  var act = el.dataset.act;
+  var d = ui.sheet && ui.sheet.ctx;
+
+  if (act === 'close-sheet'){ ui.sheet = null; syncSheet(); return; }
+  if (act === 'home'){ goto('home'); return; }
+  if (act === 'go-review'){ ui.view = 'review'; ui.revTab = 'daily'; ui.sheet = null; render(); window.scrollTo(0,0); return; }
+  if (act === 'go-settings'){ ui.view = 'settings'; ui.sheet = null; render(); window.scrollTo(0,0); return; }
+
+  if (act === 'open-register'){ ui.sheet = {type:'register', ctx:{presetId:null, minutes:30, stopPoint:'只查完这一个问题'}}; syncSheet(); return; }
+  if (act === 'open-blocks'){ ui.sheet = {type:'blocks', ctx:{}}; syncSheet(); return; }
+  if (act === 'open-reserve'){ ui.sheet = {type:'reserve', ctx:{}}; syncSheet(); return; }
+  if (act === 'open-calc'){ ui.sheet = {type:'calc', ctx:{}}; syncSheet(); return; }
+  if (act === 'import'){ ui.sheet = {type:'import', ctx:{}}; syncSheet(); return; }
+  if (act === 'import-merge'){ doImport('merge'); return; }
+  if (act === 'import-replace'){ doImport('replace'); return; }
+  if (act === 'lang'){ setLanguage(el.getAttribute('data-v')); return; }
+  if (act === 'check-update'){ checkUpdate(); return; }
+  if (act === 'download-apk'){
+    var ca = ui.sheet && ui.sheet.ctx;
+    ui.sheet = null; syncSheet();
+    if (ca && ca.apk && canInstall()){
+      try { window.AndroidApp.installApk(ca.apk, ca.tag || 'latest'); }
+      catch (e) { toast('下载失败：' + e.message); }
+    } else if (ca && ca.url){
+      window.open(ca.url, '_blank');
+    }
+    return;
+  }
+  if (act === 'open-release'){
+    var uu = ui.sheet && ui.sheet.ctx && ui.sheet.ctx.url;
+    ui.sheet = null; syncSheet();
+    if (uu){
+      if (window.AndroidApp && window.AndroidApp.openUrl){ try { window.AndroidApp.openUrl(uu); } catch(e){} }
+      else window.open(uu, '_blank');
+    }
+    return;
+  }
+  if (act === 'calc-apply'){ applyCalc(); return; }
+  if (act === 'edit-entry'){ ui.sheet = {type:'entry', ctx:{id: el.getAttribute('data-id')}}; syncSheet(); return; }
+  if (act === 'entry-save'){ saveEntryEdit(); return; }
+  if (act === 'entry-del'){ deleteEntry(ui.sheet && ui.sheet.ctx && ui.sheet.ctx.id); return; }
+  if (act === 'entry-restore'){ restoreEntry(el.getAttribute('data-id')); return; }
+  if (act === 'toggle-deleted'){ ui.showDeleted = !ui.showDeleted; render(); return; }
+
+  if (act === 'pick-preset'){
+    if (!d) return;
+    d.presetId = el.dataset.id;
+    var p = presetById(d.presetId);
+    if (p && p.column === 'high' && d.minutes < 30) d.minutes = 30;
+    syncSheet();
+    return;
+  }
+  if (act === 'plus'){ if (!d) return; d.minutes = Math.min(600, d.minutes + 5); syncSheet(); return; }
+  if (act === 'minus'){ if (!d) return; d.minutes = Math.max(5, d.minutes - 5); syncSheet(); return; }
+  if (act === 'set-min'){ if (!d) return; d.minutes = Number(el.dataset.v); syncSheet(); return; }
+  if (act === 'confirm-register'){ confirmRegister(); return; }
+
+  if (act === 'rs-policy'){ if (!d) return; d.policy = el.dataset.v; syncSheet(); return; }
+  if (act === 'confirm-reserve'){ confirmReserve(); return; }
+  if (act === 'block-start'){
+    var bb = S.blocks.filter(function(x){ return x.id === el.dataset.id; })[0];
+    if (!bb || bb.status !== 'reserved') return;
+    bb.status = 'used';
+    addEntry({presetId: bb.presetId, minutes: bb.plannedMinutes, kind:'block', blockId: bb.id});
+    ui.sheet = null;
+    render();
+    toast('已记：' + bb.presetName + ' ' + bb.plannedMinutes + ' 分');
+    return;
+  }
+  if (act === 'block-noshow'){
+    var bn = S.blocks.filter(function(x){ return x.id === el.dataset.id; })[0];
+    applyNoShow(bn);
+    ui.sheet = null;
+    render();
+    return;
+  }
+  if (act === 'block-cancel'){
+    var bc = S.blocks.filter(function(x){ return x.id === el.dataset.id; })[0];
+    if (bc && bc.status === 'reserved'){ bc.status = 'cancelled'; save(); ui.sheet = null; render(); toast('已取消预约'); }
+    return;
+  }
+
+  if (act === 'rev-tab'){ ui.revTab = el.dataset.tab; ui.openDay = null; render(); return; }
+  if (act === 'toggle-day'){
+    var k = el.dataset.key;
+    ui.openDay = (ui.openDay === k) ? null : k;
+    render();
+    return;
+  }
+  if (act === 'range'){ ui.range = Number(el.dataset.v); render(); return; }
+
+  if (act === 'finish-setup'){
+    var c = S.config;
+    if (!(Number(c.limitMin) > 0 && Number(c.energyThr) > 0 && Number(c.attentionThr) > 0)){
+      toast('三个数都要填');
+      return;
+    }
+    c.set = true;
+    save();
+    goto('home');
+    return;
+  }
+
+  if (act === 'del-preset'){
+    var pid = el.dataset.pid;
+    S.presets = S.presets.filter(function(p){ return p.id !== pid; });
+    save(); render();
+    toast('预设已删除（历史记录不受影响）');
+    return;
+  }
+  if (act === 'add-preset'){
+    ui.sheet = {type:'newpreset', ctx:{
+      name: '新事件', column: 'low', naturalEnd: true,
+      eMin: (Number(S.config.energyThr) || 60), aMin: (Number(S.config.attentionThr) || 60),
+      eCoef: 1, aCoef: 1
+    }};
+    syncSheet();
+    requestAnimationFrame(function(){
+      var inp = document.getElementById('np-name');
+      if (inp){ inp.focus(); if (inp.select) inp.select(); }
+    });
+    return;
+  }
+  if (act === 'toggle-help'){
+    var hb = document.getElementById(el.getAttribute('data-target'));
+    if (hb){
+      hb.hidden = !hb.hidden;
+      el.textContent = tr(hb.hidden ? '系数是什么意思？' : '收起说明');
+    }
+    return;
+  }
+  if (act === 'np-col'){ ui.sheet.ctx.column = el.getAttribute('data-v'); syncSheet(); return; }
+  if (act === 'np-end'){ ui.sheet.ctx.naturalEnd = el.getAttribute('data-v') === '1'; syncSheet(); return; }
+  if (act === 'np-save'){ saveNewPreset(); return; }
+  if (act === 'export'){ exportJSON(); return; }
+  if (act === 'undo'){ undoLast(); return; }
+  if (act === 'clear-arm'){ ui.clearArmed = true; render(); return; }
+  if (act === 'clear-cancel'){ ui.clearArmed = false; render(); return; }
+  if (act === 'clear-confirm'){ clearHistory(); return; }
+});
+
+/* 文本输入：不重渲染，避免打断输入 */
+document.addEventListener('input', function(ev){
+  var el = ev.target;
+  if (el && el.dataset && el.dataset.calc){
+    var out = document.getElementById('out-' + el.dataset.calc + '-' + el.dataset.kind);
+    if (out){
+      var r = calcCoef(el.dataset.kind, el.value);
+      out.textContent = '→ ' + r.text;
+      out.classList.toggle('warn', r.warn);
+    }
+    return;
+  }
+  if (el && (el.id === 'np-emin' || el.id === 'np-amin')){ refreshNewPreset(); return; }
+  if (el && el.id === 'ed-min'){ refreshEditPreview(); return; }
+  if (el && el.id === 'stopInput' && ui.sheet && ui.sheet.ctx){
+    ui.sheet.ctx.stopPoint = el.value;
+    var btn = document.querySelector('[data-act="confirm-register"]');
+    if (btn) btn.disabled = !String(el.value).trim();
+  }
+});
+
+/* 数值 / 下拉 / 日期：change 时写入 */
+document.addEventListener('change', function(ev){
+  var el = ev.target;
+  if (!el) return;
+
+  if (el.id === 'importFile'){
+    var f = el.files && el.files[0];
+    if (!f) return;
+    var rd = new FileReader();
+    rd.onload = function(){
+      var txt = String(rd.result || '');
+      var obj;
+      try { obj = JSON.parse(txt); } catch (err) { toast('不是有效的 JSON'); return; }
+      var st = (obj && obj.state) ? obj.state : obj;
+      if (!st || !Array.isArray(st.entries)){ toast('文件里没有可用的记录'); return; }
+      if (ui.sheet && ui.sheet.type === 'import'){
+        ui.sheet.ctx.data = st;
+        ui.sheet.ctx.name = f.name;
+        ui.sheet.ctx.exportedAt = (obj && obj.exportedAt) ? obj.exportedAt : '';
+        syncSheet();
+      }
+    };
+    rd.readAsText(f);
+    return;
+  }
+  if (el.id === 'ed-sel'){ refreshEditPreview(); return; }
+  if (el.id === 'ed-time'){ return; }
+
+  /* 预设表 */
+  if (el.dataset && el.dataset.pid && el.dataset.pfield){
+    var p = presetById(el.dataset.pid);
+    if (!p) return;
+    var f = el.dataset.pfield;
+    if (f === 'name'){ p.name = el.value.trim() || p.name; }
+    else if (f === 'column'){ p.column = el.value; }
+    else if (f === 'energy'){ p.energy = clampNum(el.value, 0, 9, 1); }
+    else if (f === 'attention'){ p.attention = clampNum(el.value, 0, 9, 1); }
+    save(); render();
+    return;
+  }
+
+  /* 刻度与设置 */
+  var setKey = el.dataset && el.dataset.set;
+  if (!setKey) return;
+  var c = S.config;
+
+  if (setKey === 'limit'){ c.limitMin = Math.max(0, Math.round(Number(el.value) || 0)); }
+  else if (setKey === 'ethr'){ c.energyThr = Math.max(0, Math.round(Number(el.value) || 0)); }
+  else if (setKey === 'athr'){ c.attentionThr = Math.max(0, Math.round(Number(el.value) || 0)); }
+  else if (setKey === 'nw-date'){
+    c.nextWindow.date = el.value || '';
+    if (c.nextWindow.date){
+      S.blocks.forEach(function(b){
+        if (b.status === 'pendingWindow'){
+          b.status = 'reserved';
+          b.reserveDate = c.nextWindow.date;
+          if (c.nextWindow.start) b.start = c.nextWindow.start;
+          if (c.nextWindow.end) b.end = c.nextWindow.end;
+        }
+      });
+    }
+  }
+  else if (setKey === 'nw-start'){ c.nextWindow.start = el.value || ''; }
+  else if (setKey === 'nw-end'){ c.nextWindow.end = el.value || ''; }
+  else if (setKey === 'nwpolicy'){ c.noshowPolicy = el.value; }
+  else if (setKey === 'rs-date'){ ui.sheet.ctx.date = el.value; save(); syncSheet(); return; }
+  else if (setKey === 'rs-start'){ ui.sheet.ctx.start = el.value; ui.sheet.ctx.minutes = diffMin(ui.sheet.ctx.start, ui.sheet.ctx.end) || ui.sheet.ctx.minutes; syncSheet(); return; }
+  else if (setKey === 'rs-end'){ ui.sheet.ctx.end = el.value; ui.sheet.ctx.minutes = diffMin(ui.sheet.ctx.start, ui.sheet.ctx.end) || ui.sheet.ctx.minutes; syncSheet(); return; }
+  else if (setKey === 'rs-preset'){ ui.sheet.ctx.presetId = el.value; syncSheet(); return; }
+  else if (setKey === 'rs-minutes'){ ui.sheet.ctx.minutes = Math.max(1, Math.round(Number(el.value) || 1)); syncSheet(); return; }
+
+  /* 若刻度被清空，回到首次设定 */
+  if (!(Number(c.limitMin) > 0 && Number(c.energyThr) > 0 && Number(c.attentionThr) > 0)){
+    if (ui.view === 'setup') c.set = false;
+  } else {
+    c.set = true;
+  }
+  save(); render();
+});
+
+/* ================= 启动 ================= */
+var hasNative = false;
+try { hasNative = !!(window.AndroidApp && window.AndroidApp.saveState); } catch (e0) {}
+
+var storageOK = hasNative;
+if (!storageOK){
+  try {
+    localStorage.setItem('__probe__', '1');
+    localStorage.removeItem('__probe__');
+    storageOK = true;
+  } catch (e) {
+    storageOK = false;
+  }
+}
+
+load();
+LANG = (S.config.lang === 'en') ? 'en' : 'zh';
+if (!S.config.lang){
+  if (S.config.set){ S.config.lang = 'zh'; save(); }   /* 老用户默认中文，不打断 */
+  else ui.view = 'lang';
+}
+if (!S.config.set && ui.view !== 'lang') ui.view = 'setup';
+render();
+
+/* 打开时若已跨过 04:00，仅重绘（不做任何结算动作，避免“打卡”感） */
+document.addEventListener('visibilitychange', function(){
+  if (!document.hidden) render();
+});
+
+})();

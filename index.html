@@ -11,6 +11,7 @@
   --bg:#f7f6f3; --surface:#ffffff; --ink:#1b1b1d; --ink2:#5c5c63; --ink3:#8b8b93;
   --line:#e6e3dc; --line2:#f0ede7; --chip:#f2f0ea;
   --calm:#33566a; --calm-ink:#ffffff; --amber:#9a6a1f; --rust:#9c4a3f;
+  --link:#2f6d9e;
   --barH:#c3b3a2; --barL:#9db4bd;
   --shadow:0 -10px 30px rgba(0,0,0,.14);
   --r:16px;
@@ -20,6 +21,7 @@
     --bg:#131315; --surface:#1b1b1e; --ink:#ececef; --ink2:#a5a5ad; --ink3:#7c7c85;
     --line:#2c2c31; --line2:#222226; --chip:#26262a;
     --calm:#8bb0c2; --calm-ink:#101619; --amber:#cfa25c; --rust:#cf887c;
+    --link:#7fb3d9;
     --barH:#6e6156; --barL:#4b616a;
     --shadow:0 -10px 30px rgba(0,0,0,.55);
   }
@@ -208,6 +210,21 @@ td.num{font-variant-numeric:tabular-nums; white-space:nowrap;}
 .mini-btn.on{background:var(--chip); color:var(--ink); border-color:var(--ink3);}
 .mute{color:var(--ink3);}
 
+/* 系数说明：蓝字链接 + 展开块 */
+.helplink{
+  display:inline-block; margin-top:10px; padding:0; border:0; background:none;
+  font:inherit; font-size:12.5px; color:var(--link);
+  border-bottom:1px dashed currentColor; cursor:pointer;
+}
+.helpbox{
+  margin-top:10px; padding:12px 14px; border-radius:12px;
+  background:var(--chip); font-size:12.5px; line-height:1.95; color:var(--ink2);
+}
+.helpbox[hidden]{display:none;}
+.helpbox p{margin:0 0 9px;}
+.helpbox p:last-child{margin-bottom:0;}
+.helpbox b{color:var(--ink); font-weight:600;}
+
 /* 系数计算器 */
 .calc-rule{font-size:12.5px; color:var(--ink2); line-height:1.85; margin-bottom:10px;}
 .calc-rule b{color:var(--ink); font-weight:600; font-variant-numeric:tabular-nums;}
@@ -307,7 +324,7 @@ td.num{font-variant-numeric:tabular-nums; white-space:nowrap;}
 /* ================= 常量 ================= */
 var RESET_HOUR = 4;                 /* 每日 04:00 本地时区结算 */
 var KEY = 'scale.ledger.v1';
-var APP_VERSION = '1.2.0';
+var APP_VERSION = '1.2.1';
 var REPO = 'twilightsunmoon-web/scale';
 var WEEK_ZH = ['周日','周一','周二','周三','周四','周五','周六'];
 var WEEK_EN = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
@@ -599,6 +616,19 @@ var EN = {
   '网页版刷新即可拿到新版；APK 去 Release 下载覆盖安装，数据会保留。':'On the web just reload; for the APK download from Releases and install over it — your data stays.',
   '下载失败：':'Download failed: ',
 
+  '系数是什么意思？':'What does the coefficient mean?',
+  '收起说明':'Hide',
+  '把「系数」当成一个倍率，不是分数，也不是评价。':'Treat the coefficient as a multiplier — not a score, not a judgement.',
+  '系数 2':'A coefficient of 2',
+  ' 的意思是：这一项每过 1 分钟，扣 2 点。登记 60 分钟就是 120 点。':' means: 2 points are deducted per minute. Logging 60 minutes costs 120 points.',
+  '不同的事每分钟扣得不一样：刷手机 30 分钟和散步 30 分钟，占的不是同一份额度，所以给不同的倍率。':'Different things drain at different rates: 30 minutes of scrolling and 30 minutes of walking do not take the same thing out of you, so they get different multipliers.',
+  '系数是反推出来的：':'The coefficient is derived backwards:',
+  '系数 = 阈值 ÷ 整天只做这一项的分钟数':'coefficient = threshold ÷ minutes until you would be done if today were only this',
+  '。阈值 200、你填 100 分钟 → 系数 2；填 400 分钟 → 系数 0.5。':'. Threshold 200, you enter 100 minutes → coefficient 2; enter 400 minutes → 0.5.',
+  '它回答的是「同样一小时，这件事到底有多耗」。所以别人的系数对你没意义——它取决于你自己的阈值。':'It answers “for the same hour, how much does this really cost me”. Someone else’s coefficients are meaningless to you — they depend on your own thresholds.',
+  '白名单（睡眠、散步这类）不参与计算，系数填什么都无所谓。':'White-list items (sleep, walking) are not counted at all — whatever you put as their coefficient does not matter.',
+
+  '的意思是：这一项每过 1 分钟，扣 2 点。登记 60 分钟就是 120 点。':' means: 2 points per minute. Logging 60 minutes costs 120 points.',
   /* 提示语 */
   '本地存储写入失败':'Could not write local storage',
   '这一项现在不可开':'That one is closed right now',
@@ -1715,6 +1745,19 @@ function restoreEntry(id){
   var raw = thr / m;
   return {text: fmtPts(clampNum(raw, 0, 9, 1)) + (raw > 9.05 ? '（上限截断）' : ''), warn: raw > 9.05};
 }
+/* 系数是什么意思：两处计算入口共用 */
+function coefHelpHTML(id){
+  return '' +
+    '<button class="helplink" data-act="toggle-help" data-target="' + id + '">系数是什么意思？</button>' +
+    '<div class="helpbox" id="' + id + '" hidden>' +
+      '<p>把「系数」当成一个倍率，不是分数，也不是评价。</p>' +
+      '<p><b>系数 2</b> 的意思是：这一项每过 1 分钟，扣 2 点。登记 60 分钟就是 120 点。</p>' +
+      '<p>不同的事每分钟扣得不一样：刷手机 30 分钟和散步 30 分钟，占的不是同一份额度，所以给不同的倍率。</p>' +
+      '<p>系数是反推出来的：<b>系数 = 阈值 ÷ 整天只做这一项的分钟数</b>。阈值 200、你填 100 分钟 → 系数 2；填 400 分钟 → 系数 0.5。</p>' +
+      '<p>它回答的是「同样一小时，这件事到底有多耗」。所以别人的系数对你没意义——它取决于你自己的阈值。</p>' +
+      '<p>白名单（睡眠、散步这类）不参与计算，系数填什么都无所谓。</p>' +
+    '</div>';
+}
 function sheetCalc(){
   var eT = Number(S.config.energyThr) || 0;
   var aT = Number(S.config.attentionThr) || 0;
@@ -1745,6 +1788,7 @@ function sheetCalc(){
       '当前阈值 精力 <b>' + fmtPts(eT) + '</b> · 注意力 <b>' + fmtPts(aT) + '</b> <span class="mute">（在设置里改，这里跟着变）</span><br>' +
       '「等效分钟」= 假定整天只做这一项，多少分钟后这条线见底。留空 = 这一项不改。' +
     '</div>' +
+    coefHelpHTML('calcHelpBox') +
     rows +
     '<div class="note">白名单不计入任何额度，已跳过。系数上限 9。</div>' +
     '<button class="primary" data-act="calc-apply">写入这些系数</button>' +
@@ -2172,6 +2216,7 @@ function sheetNewPreset(){
     '<div class="subhd">这一项多少分钟见底</div>' +
     '<div class="calc-rule">「整天只做这一项，多少分钟后这条线见底」——' +
       '系数 = 阈值 ÷ 这个分钟数（当前精力 ' + fmtPts(eT) + ' / 注意力 ' + fmtPts(aT) + '）。</div>' +
+    coefHelpHTML('npHelpBox') +
     coefPart +
     '<div class="subhd">结束方式</div>' +
     '<span class="seg"><button class="' + (c.naturalEnd ? 'on' : '') + '" data-act="np-end" data-v="1">有终点</button>' +
@@ -2430,6 +2475,14 @@ document.addEventListener('click', function(ev){
       var inp = document.getElementById('np-name');
       if (inp){ inp.focus(); if (inp.select) inp.select(); }
     });
+    return;
+  }
+  if (act === 'toggle-help'){
+    var hb = document.getElementById(el.getAttribute('data-target'));
+    if (hb){
+      hb.hidden = !hb.hidden;
+      el.textContent = tr(hb.hidden ? '系数是什么意思？' : '收起说明');
+    }
     return;
   }
   if (act === 'np-col'){ ui.sheet.ctx.column = el.getAttribute('data-v'); syncSheet(); return; }
