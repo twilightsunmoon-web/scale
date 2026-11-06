@@ -324,7 +324,7 @@ td.num{font-variant-numeric:tabular-nums; white-space:nowrap;}
 /* ================= 常量 ================= */
 var RESET_HOUR = 4;                 /* 每日 04:00 本地时区结算 */
 var KEY = 'scale.ledger.v1';
-var APP_VERSION = '1.2.1';
+var APP_VERSION = '1.2.2';
 var REPO = 'twilightsunmoon-web/scale';
 var WEEK_ZH = ['周日','周一','周二','周三','周四','周五','周六'];
 var WEEK_EN = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
@@ -629,6 +629,9 @@ var EN = {
   '白名单（睡眠、散步这类）不参与计算，系数填什么都无所谓。':'White-list items (sleep, walking) are not counted at all — whatever you put as their coefficient does not matter.',
 
   '的意思是：这一项每过 1 分钟，扣 2 点。登记 60 分钟就是 120 点。':' means: 2 points per minute. Logging 60 minutes costs 120 points.',
+  '确认删除':'Confirm delete',
+  '已删除这条冻结块记录':'Frozen-block record deleted',
+
   /* 提示语 */
   '本地存储写入失败':'Could not write local storage',
   '这一项现在不可开':'That one is closed right now',
@@ -781,7 +784,7 @@ function headerDate(d){
 
 /* ================= 状态 ================= */
 var S = null;
-var ui = {view:'home', sheet:null, revTab:'daily', openDay:null, range:7, clearArmed:false,
+var ui = {view:'home', sheet:null, revTab:'daily', openDay:null, range:7, clearArmed:false, delArm:null,
           waterPct:{}, waterDay:'', showDeleted:false};
 
 function seedState(){
@@ -1576,6 +1579,8 @@ function sheetBlocks(){
       var canStart = b.status === 'reserved' && b.reserveDate === t;
       var canNoShow = b.status === 'reserved' && b.reserveDate <= t;
       var canCancel = b.status === 'reserved' && b.reserveDate > t;
+      var canCancelPending = b.status === 'pendingWindow';   /* 顺延后还没排到窗口的，也能取消 */
+      var delArmed = (ui.delArm === b.id);
       return '<div class="blockline" style="display:block">' +
         '<div style="display:flex;justify-content:space-between;gap:10px;align-items:baseline">' +
           '<span class="bl">' + blockWhen(b) + ' · ' + esc(b.presetName) + '</span>' +
@@ -1583,13 +1588,16 @@ function sheetBlocks(){
         '</div>' +
         '<div class="bs">' + b.plannedMinutes + ' 分 · 精力 ' + fmtPts(b.plannedMinutes*b.energyCoef) + ' · 注意力 ' + fmtPts(b.plannedMinutes*b.attentionCoef) +
           ' · 兜底：' + (b.noshowPolicy === 'postpone' ? '顺延' : '归零') + (b.reserveDate ? ' · 绑 ' + b.reserveDate : '') + '</div>' +
-        ((canStart || canNoShow || canCancel)
-          ? '<div class="row">' +
-              (canStart ? '<button class="primary" style="padding:11px" data-act="block-start" data-id="' + b.id + '">开始这一场</button>' : '') +
-              (canNoShow ? '<button class="ghost" style="margin-top:0" data-act="block-noshow" data-id="' + b.id + '">爽约</button>' : '') +
-              (canCancel ? '<button class="ghost" style="margin-top:0" data-act="block-cancel" data-id="' + b.id + '">取消预约</button>' : '') +
-            '</div>'
-          : '') +
+        '<div class="row">' +
+          ((canStart || canNoShow || canCancel || canCancelPending)
+            ? ((canStart ? '<button class="primary" style="padding:11px" data-act="block-start" data-id="' + b.id + '">开始这一场</button>' : '') +
+               (canNoShow ? '<button class="ghost" style="margin-top:0" data-act="block-noshow" data-id="' + b.id + '">爽约</button>' : '') +
+               ((canCancel || canCancelPending) ? '<button class="ghost" style="margin-top:0" data-act="block-cancel" data-id="' + b.id + '">取消预约</button>' : ''))
+            : '') +
+          (delArmed
+            ? '<button class="ghost danger" style="margin-top:0" data-act="block-del" data-id="' + b.id + '">确认删除</button>'
+            : '<button class="ghost" style="margin-top:0" data-act="block-del" data-id="' + b.id + '">删除</button>') +
+        '</div>' +
       '</div>';
     }).join('');
   }
@@ -2363,7 +2371,7 @@ document.addEventListener('click', function(ev){
   if (act === 'go-settings'){ ui.view = 'settings'; ui.sheet = null; render(); window.scrollTo(0,0); return; }
 
   if (act === 'open-register'){ ui.sheet = {type:'register', ctx:{presetId:null, minutes:30, stopPoint:'只查完这一个问题'}}; syncSheet(); return; }
-  if (act === 'open-blocks'){ ui.sheet = {type:'blocks', ctx:{}}; syncSheet(); return; }
+  if (act === 'open-blocks'){ ui.sheet = {type:'blocks', ctx:{}}; ui.delArm = null; syncSheet(); return; }
   if (act === 'open-reserve'){ ui.sheet = {type:'reserve', ctx:{}}; syncSheet(); return; }
   if (act === 'open-calc'){ ui.sheet = {type:'calc', ctx:{}}; syncSheet(); return; }
   if (act === 'import'){ ui.sheet = {type:'import', ctx:{}}; syncSheet(); return; }
@@ -2430,9 +2438,21 @@ document.addEventListener('click', function(ev){
     render();
     return;
   }
+  if (act === 'block-del'){
+    var bd = S.blocks.filter(function(x){ return x.id === el.dataset.id; })[0];
+    if (!bd) return;
+    if (ui.delArm !== bd.id){ ui.delArm = bd.id; syncSheet(); return; }   /* 两段式：先亮出确认 */
+    S.blocks = S.blocks.filter(function(x){ return x.id !== bd.id; });
+    ui.delArm = null;
+    save(); syncSheet();
+    toast('已删除这条冻结块记录');
+    return;
+  }
   if (act === 'block-cancel'){
     var bc = S.blocks.filter(function(x){ return x.id === el.dataset.id; })[0];
-    if (bc && bc.status === 'reserved'){ bc.status = 'cancelled'; save(); ui.sheet = null; render(); toast('已取消预约'); }
+    if (bc && (bc.status === 'reserved' || bc.status === 'pendingWindow')){
+      bc.status = 'cancelled'; save(); ui.delArm = null; ui.sheet = null; render(); toast('已取消预约');
+    }
     return;
   }
 
